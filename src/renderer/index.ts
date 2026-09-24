@@ -1,4 +1,5 @@
 import * as electron from "electron";
+import * as remote from "@electron/remote";
 import * as dialogs from "simple-dialogs";
 import * as async from "async";
 
@@ -28,6 +29,7 @@ const namespaces = [
 
 function onInitialize(sender: any, corePath: string, userDataPath: string, languageCode: string) {
   settings.setPaths(corePath, userDataPath);
+  i18n.setLocalesPath(`${remote.app.getAppPath()}/resources/locales`);
   i18n.setLanguageCode(languageCode);
   i18n.load(namespaces, () => { settings.load(onSettingsLoaded); });
 }
@@ -52,7 +54,7 @@ function onSettingsLoaded(err: Error) {
 
     new dialogs.ConfirmDialog(label, options, (shouldProceed) => {
       if (!shouldProceed) {
-        electron.remote.app.quit();
+        remote.app.quit();
         return;
       }
 

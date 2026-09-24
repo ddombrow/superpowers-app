@@ -1,9 +1,0 @@
-{
-  "name": "superpowers-app",
-  "version": "0.0.0-dev",
-  "main": "main.js",
-  "superpowers": {
-    "electron": "7.1.4",
-    "appApiVersion": 5
-  }
-}

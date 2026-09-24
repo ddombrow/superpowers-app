@@ -2,12 +2,9 @@ import * as electron from "electron";
 import * as yargs from "yargs";
 import * as path from "path";
 import * as fs from "fs";
-import { LocalizedError } from "./shared/i18n";
+import { LocalizedError } from "../shared/i18n";
 
-const argv = yargs
-  .usage("Usage: $0 [options]")
-  .describe("core-path", "Path to Superpowers core")
-  .argv;
+const argv = yargs.usage("Usage: $0 [options]").describe("core-path", "Path to Superpowers core").argv;
 
 export default function getPaths(callback: (err: LocalizedError, corePath?: string, dataPath?: string) => void) {
   let dataPath: string;
@@ -15,14 +12,18 @@ export default function getPaths(callback: (err: LocalizedError, corePath?: stri
   let corePath = argv["core-path"] != null ? path.resolve(argv["core-path"] as string) : null;
   if (corePath != null) {
     dataPath = corePath;
-    process.nextTick(() => { callback(null, corePath, dataPath); });
+    process.nextTick(() => {
+      callback(null, corePath, dataPath);
+    });
     return;
   }
 
   try {
     dataPath = path.join(electron.app.getPath("appData"), "Superpowers");
   } catch (err) {
-    process.nextTick(() => { callback(new LocalizedError("startup:errors.couldNotGetDataPath", { details: err.message })); });
+    process.nextTick(() => {
+      callback(new LocalizedError("startup:errors.couldNotGetDataPath", { details: err.message }));
+    });
     return;
   }
 

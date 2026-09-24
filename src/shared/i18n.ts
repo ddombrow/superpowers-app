@@ -1,10 +1,22 @@
 import * as async from "async";
 import * as fs from "fs";
 
-interface I18nValue { [key: string]: I18nValue | string; }
-interface I18nContext { [name: string]: I18nValue; }
+interface I18nValue {
+  [key: string]: I18nValue | string;
+}
+interface I18nContext {
+  [name: string]: I18nValue;
+}
 
-export const languageIds = fs.readdirSync(`${__dirname}/../locales`);
+let localesPath: string;
+export function setLocalesPath(path: string) {
+  localesPath = path;
+}
+
+export function getLanguageIds() {
+  return fs.readdirSync(localesPath);
+}
+
 export let languageCode: string;
 
 export function setLanguageCode(code: string) {
@@ -15,18 +27,24 @@ export const contexts: { [name: string]: I18nContext } = {};
 export const fallbackContexts: { [name: string]: I18nContext } = {};
 
 export class LocalizedError {
-  constructor(public key: string, public variables: { [key: string]: string; }) {}
+  constructor(
+    public key: string,
+    public variables: { [key: string]: string }
+  ) {}
 }
 
 export function load(contextNames: string[], callback: () => void) {
   async.each(contextNames, loadContext.bind(null, languageCode, contexts), () => {
-    if (languageCode === "en") { callback(); return; }
+    if (languageCode === "en") {
+      callback();
+      return;
+    }
 
     async.each(contextNames, loadContext.bind(null, "en", fallbackContexts), callback);
   });
 }
 
-export function t(key: string, variables?: { [name: string]: string|number; }) {
+export function t(key: string, variables?: { [name: string]: string | number }) {
   let result = genericT(contexts, key, variables);
   if (result == null) result = genericT(fallbackContexts, key, variables);
   return result != null ? result : key;
@@ -34,25 +52,37 @@ export function t(key: string, variables?: { [name: string]: string|number; }) {
 
 export function getLocalizedFilename(filename: string) {
   if (languageCode === "en") return filename;
-  const [ basename, extension ] = filename.split(".");
+  const [basename, extension] = filename.split(".");
   return `${basename}.${languageCode}.${extension}`;
 }
 
-function loadContext(languageCode: string, contexts: { [name: string]: I18nContext; }, contextName: string, callback: () => void) {
-  const filePath = `${__dirname}/../locales/${languageCode}/${contextName}.json`;
+function loadContext(
+  languageCode: string,
+  contexts: { [name: string]: I18nContext },
+  contextName: string,
+  callback: () => void
+) {
+  const filePath = `${localesPath}/${languageCode}/${contextName}.json`;
 
   fs.readFile(filePath, { encoding: "utf8" }, (err, text) => {
-    if (err != null) { callback(); return; }
+    if (err != null) {
+      callback();
+      return;
+    }
     contexts[contextName] = JSON.parse(text);
     callback();
   });
 }
 
-function genericT(contexts: { [name: string]: I18nContext; }, key: string, variables?: { [name: string]: string|number; }) {
-  const [ contextName, keys ] = key.split(":");
+function genericT(
+  contexts: { [name: string]: I18nContext },
+  key: string,
+  variables?: { [name: string]: string | number }
+) {
+  const [contextName, keys] = key.split(":");
   const keyParts = keys.split(".");
 
-  let valueOrText: I18nValue|string = contexts[contextName];
+  let valueOrText: I18nValue | string = contexts[contextName];
   if (valueOrText == null) return null;
 
   for (const keyPart of keyParts) {
@@ -64,7 +94,7 @@ function genericT(contexts: { [name: string]: I18nContext; }, key: string, varia
   else return key;
 }
 
-function insertVariables(text: string, variables: { [key: string]: string|number; }) {
+function insertVariables(text: string, variables: { [key: string]: string | number }) {
   let index = 0;
   do {
     index = text.indexOf("${", index);

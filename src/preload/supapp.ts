@@ -1,12 +1,12 @@
 import * as crypto from "crypto";
 import * as electron from "electron";
+import * as remote from "@electron/remote";
 import * as async from "async";
 import * as fs from "fs";
-import * as fsMkdirp from "mkdirp";
 import * as childProcess from "child_process";
 import * as os from "os";
 
-const currentWindow = electron.remote.getCurrentWindow();
+const currentWindow = remote.getCurrentWindow();
 
 const tmpRoot = os.tmpdir();
 const tmpCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -21,7 +21,7 @@ function getNextIpcId(): string {
   nextIpcId++;
   return ipcId;
 }
-const ipcCallbacks: { [id: string]: Function } = {};
+const ipcCallbacks: { [id: string]: (...args: any[]) => void } = {};
 
 electron.ipcRenderer.on("choose-folder-callback", onFolderChosen);
 electron.ipcRenderer.on("choose-file-callback", onFileChosen);
@@ -34,8 +34,8 @@ type AuthorizeFolderCallback = () => void;
 type CheckPathAuthorizationCallback = (normalizedPath: string, access: "readWrite" | "execute") => void;
 
 interface OpenWindowOptions {
-  size?: { width: number; height: number; };
-  minSize?: { width: number; height: number; };
+  size?: { width: number; height: number };
+  minSize?: { width: number; height: number };
   resizable?: boolean;
 }
 
@@ -69,7 +69,12 @@ function checkPathAuthorization(pathToCheck: string, callback: CheckPathAuthoriz
   electron.ipcRenderer.send("check-path-authorization", secretKey, ipcId, window.location.origin, pathToCheck);
 }
 
-function onPathAuthorizationChecked(event: Electron.Event, ipcId: string, checkedPath: string, authorization: "readWrite" | "execute") {
+function onPathAuthorizationChecked(
+  event: Electron.Event,
+  ipcId: string,
+  checkedPath: string,
+  authorization: "readWrite" | "execute"
+) {
   const callback = ipcCallbacks[ipcId] as CheckPathAuthorizationCallback;
   if (callback == null) return;
   delete ipcCallbacks[ipcId];
@@ -78,15 +83,21 @@ function onPathAuthorizationChecked(event: Electron.Event, ipcId: string, checke
 }
 
 namespace SupApp {
-  export function onMessage(messageType: string, callback: Function) {
-    electron.ipcRenderer.addListener(`sup-app-message-${messageType}`, (event: Electron.Event, ...args: any[]) => { callback(...args); });
+  export function onMessage(messageType: string, callback: (...args: any[]) => void) {
+    electron.ipcRenderer.addListener(`sup-app-message-${messageType}`, (event: Electron.Event, ...args: any[]) => {
+      callback(...args);
+    });
   }
   export function sendMessage(windowId: number, message: string) {
     electron.ipcRenderer.send("send-message", windowId, message);
   }
 
-  export function getCurrentWindow() { return currentWindow; }
-  export function showMainWindow() { electron.ipcRenderer.send("show-main-window"); }
+  export function getCurrentWindow() {
+    return currentWindow;
+  }
+  export function showMainWindow() {
+    electron.ipcRenderer.send("show-main-window");
+  }
 
   export function openWindow(url: string, options?: OpenWindowOptions) {
     if (options == null) options = {};
@@ -99,10 +110,11 @@ namespace SupApp {
     if (options.resizable == null) options.resizable = true;
 
     const electronWindowOptions: Electron.BrowserWindowConstructorOptions = {
-      icon: `${__dirname}/../superpowers.ico`,
-      useContentSize: true, autoHideMenuBar: true,
+      icon: `${remote.app.getAppPath()}/resources/icons/superpowers-256.png`,
+      useContentSize: true,
+      autoHideMenuBar: true,
       resizable: options.resizable,
-      webPreferences: { nodeIntegration: false, preload: `${__dirname}/index.js` }
+      webPreferences: { nodeIntegration: false, contextIsolation: false, sandbox: false, preload: __filename }
     };
 
     if (options.size != null) {
@@ -115,25 +127,34 @@ namespace SupApp {
       electronWindowOptions.minHeight = options.minSize.height;
     }
 
-    const window = new electron.remote.BrowserWindow(electronWindowOptions);
+    const window = new remote.BrowserWindow(electronWindowOptions);
 
-    window.webContents.on("will-navigate", (event: Event) => { event.preventDefault(); });
+    window.webContents.on("will-navigate", (event) => {
+      event.preventDefault();
+    });
     window.loadURL(url);
     return window;
   }
 
-  export function openLink(url: string) { electron.shell.openExternal(url); }
-  export function showItemInFolder(path: string) { electron.shell.showItemInFolder(path); }
+  export function openLink(url: string) {
+    electron.shell.openExternal(url);
+  }
+  export function showItemInFolder(path: string) {
+    electron.shell.showItemInFolder(path);
+  }
 
-  export function createMenu() { return new electron.remote.Menu(); }
+  export function createMenu() {
+    return new remote.Menu();
+  }
   export function createMenuItem(options: Electron.MenuItemConstructorOptions) {
-    return new electron.remote.MenuItem(options);
+    return new remote.MenuItem(options);
   }
 
   export namespace clipboard {
     export function copyFromDataURL(dataURL: string) {
       const image = electron.nativeImage.createFromDataURL(dataURL);
-      electron.clipboard.writeImage(image);
+      const blob = new Blob([new Uint8Array(image.toPNG())], { type: "image/png" });
+      electron.clipboard.write([new electron.ClipboardItem({ "image/png": blob })]);
     }
   }
 
@@ -151,7 +172,10 @@ namespace SupApp {
 
   export function tryFileAccess(filePath: string, access: "readWrite" | "execute", callback: (err: any) => void) {
     checkPathAuthorization(filePath, (err, authorization) => {
-      if (authorization !== access) { callback(new Error("Unauthorized")); return; }
+      if (authorization !== access) {
+        callback(new Error("Unauthorized"));
+        return;
+      }
 
       fs.exists(filePath, (exists) => {
         callback(exists ? null : new Error("Not found"));
@@ -166,24 +190,35 @@ namespace SupApp {
         return;
       }
 
-      fsMkdirp(normalizedFolderPath, callback);
+      fs.mkdir(normalizedFolderPath, { recursive: true }, (err) => {
+        callback(err);
+      });
     });
   }
 
   export function mktmpdir(callback: (err: any, path: string) => void) {
     let tempFolderPath: string;
-    async.retry(10, (cb) => {
-      let folderName = "superpowers-temp-";
-      for (let i = 0; i < 16; i++) folderName += getRandomTmpCharacter();
-      tempFolderPath = `${tmpRoot}/${folderName}`;
-      fs.mkdir(tempFolderPath, cb);
-    }, (err) => {
-      if (err != null) { callback(err, null); return; }
+    async.retry(
+      10,
+      (cb) => {
+        let folderName = "superpowers-temp-";
+        for (let i = 0; i < 16; i++) folderName += getRandomTmpCharacter();
+        tempFolderPath = `${tmpRoot}/${folderName}`;
+        fs.mkdir(tempFolderPath, cb);
+      },
+      (err) => {
+        if (err != null) {
+          callback(err, null);
+          return;
+        }
 
-      const ipcId = getNextIpcId();
-      ipcCallbacks[ipcId] = () => { callback(null, tempFolderPath); };
-      electron.ipcRenderer.send("authorize-folder", secretKey, ipcId, window.location.origin, tempFolderPath);
-    });
+        const ipcId = getNextIpcId();
+        ipcCallbacks[ipcId] = () => {
+          callback(null, tempFolderPath);
+        };
+        electron.ipcRenderer.send("authorize-folder", secretKey, ipcId, window.location.origin, tempFolderPath);
+      }
+    );
   }
 
   export function writeFile(filename: string, data: any, options: any, callback: (err: NodeJS.ErrnoException) => void) {
@@ -217,7 +252,11 @@ namespace SupApp {
     fs.readdir(folderPath, callback);
   }
 
-  export function spawnChildProcess(filename: string, args: string[], callback: (err: Error, childProcess?: childProcess.ChildProcess) => void) {
+  export function spawnChildProcess(
+    filename: string,
+    args: string[],
+    callback: (err: Error, childProcess?: childProcess.ChildProcess) => void
+  ) {
     checkPathAuthorization(filename, (normalizedFilename, authorization) => {
       if (authorization !== "execute") {
         callback(new Error(`Access to "${normalizedFilename}" for execution hasn't been authorized.`));

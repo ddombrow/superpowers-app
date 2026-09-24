@@ -46,8 +46,10 @@ export function setup(app: Electron.App) {
         {
           label: "Quit",
           accelerator: "Command+Q",
-          click() { app.quit(); }
-        },
+          click() {
+            app.quit();
+          }
+        }
       ] as Electron.MenuItemConstructorOptions[]
     },
     {
@@ -85,7 +87,7 @@ export function setup(app: Electron.App) {
           label: "Select All",
           accelerator: "CmdOrCtrl+A",
           role: "selectall"
-        },
+        }
       ] as Electron.MenuItemConstructorOptions[]
     },
     {
@@ -110,7 +112,7 @@ export function setup(app: Electron.App) {
           role: "front"
         }
       ]
-    },
+    }
   ];
 
   const menu = Menu.buildFromTemplate(template);

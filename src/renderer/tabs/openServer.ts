@@ -1,12 +1,13 @@
 import * as fs from "fs";
 import * as electron from "electron";
+import * as remote from "@electron/remote";
 
 import fetch, { FetchError } from "../../shared/fetch";
 import * as i18n from "../../shared/i18n";
 
 import { tabStrip, panesElt, clearActiveTab } from "./index";
 
-const { superpowers: { appApiVersion: appApiVersion } } = JSON.parse(fs.readFileSync(`${__dirname}/../../package.json`, { encoding: "utf8" }));
+const { superpowers: { appApiVersion: appApiVersion } } = JSON.parse(fs.readFileSync(`${remote.app.getAppPath()}/package.json`, { encoding: "utf8" }));
 
 export default function openServer(serverEntry: ServerEntry) {
   clearActiveTab();
@@ -122,7 +123,7 @@ function makeServerPane(serverEntry: ServerEntry) {
     }
 
     const webviewElt = document.createElement("webview");
-    webviewElt.preload = `${__dirname}/../../SupApp/index.js`;
+    // NOTE: The SupApp preload is set by the main process in "will-attach-webview"
 
     function clearEventListeners() {
       webviewElt.removeEventListener("did-finish-load", onLoad);

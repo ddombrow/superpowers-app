@@ -3,7 +3,7 @@
 const yargs = require("yargs");
 
 const fs = require("fs");
-exports.localesPath = `${__dirname}/../public/locales`;
+exports.localesPath = `${__dirname}/../resources/locales`;
 
 let fallbackLocale = null;
 
@@ -14,7 +14,11 @@ exports.loadLocale = (languageCode) => {
   const namespaces = {};
 
   let filenames = [];
-  try { filenames = fs.readdirSync(`${exports.localesPath}/${languageCode}`); } catch (err) { /* Ignore */ } 
+  try {
+    filenames = fs.readdirSync(`${exports.localesPath}/${languageCode}`);
+  } catch (err) {
+    /* Ignore */
+  }
   for (const filename of filenames) {
     const file = fs.readFileSync(`${exports.localesPath}/${languageCode}/${filename}`, { encoding: "utf8" });
     namespaces[filename.slice(0, filename.lastIndexOf("."))] = JSON.parse(file);
@@ -36,7 +40,7 @@ exports.makeT = (locale) => {
       if (value == null) return path;
     }
     return value;
-  }
+  };
 };
 
 function reportMissingKeys(languageCode, locale) {

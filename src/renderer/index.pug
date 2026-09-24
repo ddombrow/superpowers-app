@@ -70,6 +70,6 @@ html
       const exports = {};
 
       window.addEventListener("keyup", (event) => {
-        if (event.keyCode === 123 /* F12 */) electron.remote.getCurrentWindow().webContents.openDevTools();
+        if (event.keyCode === 123 /* F12 */) require("@electron/remote").getCurrentWindow().webContents.openDevTools();
       });
     script(src="index.js")

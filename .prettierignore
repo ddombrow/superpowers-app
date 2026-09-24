@@ -1,0 +1,8 @@
+out/
+dist/
+.dev-core/
+test-results/
+package-lock.json
+resources/locales/
+# Legacy renderer, replaced by the Svelte UI
+src/renderer/

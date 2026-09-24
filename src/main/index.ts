@@ -1,10 +1,18 @@
 import * as electron from "electron";
-import * as i18n from "./shared/i18n";
+import * as path from "path";
+import * as remoteMain from "@electron/remote/main";
+import * as i18n from "../shared/i18n";
 import * as menu from "./menu";
-import getPaths from "./getPaths";
-import getLanguageCode from "./getLanguageCode";
-import * as SupAppIPC from "./ipc";
-import * as url from "url";
+import getPaths from "./paths";
+import getLanguageCode from "./languageCode";
+import * as SupAppIPC from "./authorizations";
+
+const resourcesPath = path.join(electron.app.getAppPath(), "resources");
+const supAppPreloadPath = path.join(__dirname, "../preload/supapp.js");
+const windowIconPath = path.join(resourcesPath, "icons/superpowers-256.png");
+
+remoteMain.initialize();
+i18n.setLocalesPath(path.join(resourcesPath, "locales"));
 
 let corePath: string;
 let userDataPath: string;
@@ -14,9 +22,25 @@ let trayIcon: Electron.Tray;
 let trayMenu: Electron.Menu;
 
 electron.app.requestSingleInstanceLock();
-electron.app.on("second-instance", (event, argv, cwd) => electron.app.exit(0));
+electron.app.on("second-instance", () => electron.app.exit(0));
 electron.app.on("ready", onAppReady);
-electron.app.on("activate", () => { restoreMainWindow(); });
+electron.app.on("activate", () => {
+  restoreMainWindow();
+});
+
+// NOTE: SupApp (the API exposed to server & project webviews) hands out live
+// BrowserWindow, Menu and ChildProcess objects, so it needs @electron/remote
+// and can't run with context isolation. See docs/supapp-compat.md
+electron.app.on("web-contents-created", (event, webContents) => {
+  remoteMain.enable(webContents);
+
+  webContents.on("will-attach-webview", (event, webPreferences) => {
+    webPreferences.preload = supAppPreloadPath;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = false;
+    webPreferences.sandbox = false;
+  });
+});
 
 let isQuitting = false;
 let isReadyToQuit = false;
@@ -46,7 +70,9 @@ electron.ipcMain.on("ready-to-quit", (event: Electron.IpcMainEvent) => {
   electron.app.quit();
 });
 
-electron.ipcMain.on("show-main-window", () => { restoreMainWindow(); });
+electron.ipcMain.on("show-main-window", () => {
+  restoreMainWindow();
+});
 
 function onAppReady() {
   menu.setup(electron.app);
@@ -97,9 +123,21 @@ function onSigInt() {
 
 function setupTrayOrDock() {
   trayMenu = electron.Menu.buildFromTemplate([
-    { label: i18n.t("tray:dashboard"), type: "normal", click: () => { restoreMainWindow(); } },
+    {
+      label: i18n.t("tray:dashboard"),
+      type: "normal",
+      click: () => {
+        restoreMainWindow();
+      }
+    },
     { type: "separator" },
-    { label: i18n.t("tray:exit"), type: "normal", click: () => { electron.app.quit(); } }
+    {
+      label: i18n.t("tray:exit"),
+      type: "normal",
+      click: () => {
+        electron.app.quit();
+      }
+    }
   ]);
 
   // TODO: Insert 5 most recently used servers
@@ -107,10 +145,12 @@ function setupTrayOrDock() {
   // trayMenu.insert(0, new electron.MenuItem({ label: "My Server", type: "normal", click: () => {} }));
 
   if (process.platform !== "darwin") {
-    trayIcon = new electron.Tray(`${__dirname}/icon-16.png`);
+    trayIcon = new electron.Tray(path.join(resourcesPath, "icons/tray-16.png"));
     trayIcon.setToolTip("Superpowers");
     trayIcon.setContextMenu(trayMenu);
-    trayIcon.on("double-click", () => { restoreMainWindow(); });
+    trayIcon.on("double-click", () => {
+      restoreMainWindow();
+    });
   } else {
     electron.app.dock.setMenu(trayMenu);
   }
@@ -118,29 +158,34 @@ function setupTrayOrDock() {
 
 function setupMainWindow() {
   mainWindow = new electron.BrowserWindow({
-    width: 1000, height: 600, icon: `${__dirname}/superpowers.ico`,
-    minWidth: 800, minHeight: 480,
-    useContentSize: true, autoHideMenuBar: true,
+    width: 1000,
+    height: 600,
+    icon: windowIconPath,
+    minWidth: 800,
+    minHeight: 480,
+    useContentSize: true,
+    autoHideMenuBar: true,
     show: false,
-    webPreferences: { nodeIntegration: true, webviewTag: true }
+    // TODO: Enable context isolation & sandboxing once the renderer no longer needs Node
+    webPreferences: { nodeIntegration: true, contextIsolation: false, sandbox: false, webviewTag: true }
   });
 
-  mainWindow.loadURL(`file://${__dirname}/renderer/${i18n.getLocalizedFilename("index.html")}`);
+  mainWindow.loadFile(path.join(__dirname, "../legacy/renderer", i18n.getLocalizedFilename("index.html")));
 
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents.send("init", corePath, userDataPath, i18n.languageCode);
     mainWindow.show();
   });
 
-  mainWindow.webContents.on("will-navigate", (event: Event, newURL: string) => {
+  mainWindow.webContents.on("will-navigate", (event) => {
     event.preventDefault();
-    electron.shell.openExternal(newURL);
+    electron.shell.openExternal(event.url);
   });
 
   mainWindow.on("close", onCloseMainWindow);
 }
 
-function onCloseMainWindow(event: Event) {
+function onCloseMainWindow(event: electron.Event) {
   if (isQuitting) return;
 
   event.preventDefault();
@@ -149,7 +194,9 @@ function onCloseMainWindow(event: Event) {
     // NOTE: Minimize before closing to convey the fact
     // that the app is still running in the background
     mainWindow.minimize();
-    setTimeout(() => { if (mainWindow.isMinimized()) mainWindow.hide(); }, 200);
+    setTimeout(() => {
+      if (mainWindow.isMinimized()) mainWindow.hide();
+    }, 200);
   } else {
     mainWindow.hide();
   }
@@ -174,17 +221,20 @@ function restoreMainWindow() {
 }
 
 // Handle HTTP basic auth
-const httpAuthByHosts: { [origin: string]: { username: string; password: string; } } = {};
+const httpAuthByHosts: { [origin: string]: { username: string; password: string } } = {};
 
-electron.ipcMain.on("set-http-auth", (event: Electron.Event, host: string, auth: { username: string; password: string; }) => {
-  httpAuthByHosts[host] = auth;
-});
+electron.ipcMain.on(
+  "set-http-auth",
+  (event: electron.IpcMainEvent, host: string, auth: { username: string; password: string }) => {
+    httpAuthByHosts[host] = auth;
+  }
+);
 
-electron.app.on("login", (event, webContents, request, authInfo, callback) => {
+electron.app.on("login", (event, webContents, details, authInfo, callback) => {
   event.preventDefault();
 
-  const parsedUrl = url.parse(request.url);
-  const port = parsedUrl.port != null ? parsedUrl.port : (parsedUrl.protocol === "https:" ? 443 : 80);
+  const parsedUrl = new URL(details.url);
+  const port = parsedUrl.port !== "" ? parsedUrl.port : parsedUrl.protocol === "https:" ? 443 : 80;
   const hostnameAndPort = `${parsedUrl.hostname}:${port}`;
   const auth = httpAuthByHosts[hostnameAndPort];
 
@@ -193,7 +243,7 @@ electron.app.on("login", (event, webContents, request, authInfo, callback) => {
     // try again a second later
     setTimeout(() => {
       const auth = httpAuthByHosts[hostnameAndPort];
-      if (auth == null) callback(null, null);
+      if (auth == null) callback();
       else callback(auth.username, auth.password);
     }, 1000);
     return;
