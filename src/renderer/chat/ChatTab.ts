@@ -1,12 +1,11 @@
-import * as SlateIRC from "slate-irc";
-import * as ResizeHandle from "resize-handle";
-import * as TreeView from "dnd-tree-view";
+import ResizeHandle from "resize-handle";
+import TreeView from "dnd-tree-view";
 import { tabStrip, panesElt } from "../tabs";
 import * as chat from "./index";
 import * as tabs from  "../tabs";
 
 import html from "../html";
-import * as escapeHTML from "escape-html";
+import escapeHTML from "escape-html";
 import getBackgroundColor from "./getBackgroundColor";
 
 const tabTemplate = document.querySelector("template.chat-tab") as HTMLTemplateElement;
@@ -77,7 +76,7 @@ export default class ChatTab {
       new ResizeHandle(sidebarElt, "right");
       this.usersTreeView = new TreeView(this.paneElt.querySelector(".users-tree-view") as HTMLElement);
 
-      if (chat.irc != null && chat.irc.me != null) this.join();
+      if (chat.isConnected()) this.join();
     } else {
       sidebarElt.parentElement.removeChild(sidebarElt.previousElementSibling); // Resize handle
       sidebarElt.parentElement.removeChild(sidebarElt);
@@ -124,7 +123,7 @@ export default class ChatTab {
 
   join() {
     this.addInfo(`Joining ${this.target}...`);
-    chat.irc.join(this.target);
+    chat.joinChannel(this.target);
   }
 
   private linkify(text: string) {
@@ -241,15 +240,15 @@ export default class ChatTab {
       return;
     }
 
-    if (chat.irc == null) this.addInfo("You are not connected.");
+    if (!chat.isConnected()) this.addInfo("You are not connected.");
     else chat.send(this.target, message);
   }
 
   handleCommand(command: string, params: string) {
-    if (chat.irc != null) {
+    if (chat.isConnected()) {
       switch (command) {
         case "nick":
-          chat.irc.nick(params);
+          chat.changeNickname(params);
           break;
         case "msg": {
           const index = params.indexOf(" ");
@@ -291,68 +290,62 @@ export default class ChatTab {
     }
   }
 
-  onTopic(event: SlateIRC.TopicEvent) {
-    this.topicElt.classList.toggle("disabled", event.topic.length === 0);
-    this.topicElt.textContent = event.topic.length > 0 ? event.topic : "(No topic)";
+  onTopic(topic: string) {
+    this.topicElt.classList.toggle("disabled", topic.length === 0);
+    this.topicElt.textContent = topic.length > 0 ? topic : "(No topic)";
     this.waitingForTopic = false;
   }
 
-  onJoin(event: SlateIRC.JoinEvent) {
-    this.addInfo(`${event.nick} has joined ${event.channel}.`);
+  onJoin(nick: string) {
+    this.addInfo(`${nick} has joined ${this.target}.`);
 
-    if (event.nick === chat.irc.me) {
-      chat.irc.names(this.target, this.onChannelNamesReceived);
-    } else {
-      this.addUser(event.nick, "");
-    }
+    // The server sends the full user list after we join
+    if (nick !== chat.getNickname()) this.addUser(nick, "");
   }
 
-  onPart(event: SlateIRC.PartEvent) {
-    this.addInfo(`${event.nick} has parted ${event.channels[0]}.`);
-    this.removeUser(event.nick);
+  onPart(nick: string, channel: string) {
+    this.addInfo(`${nick} has parted ${channel}.`);
+    this.removeUser(nick);
   }
 
-  onNick(event: SlateIRC.NickEvent) {
-    this.addInfo(`${event.nick} has changed nick to ${event.new}.`);
+  onNick(nick: string, newNick: string) {
+    this.addInfo(`${nick} has changed nick to ${newNick}.`);
 
-    const oldUser = this.users[event.nick];
-    if (oldUser == null) return;
-    delete this.users[event.nick];
-    this.users[event.new] = { nickname: event.new, mode: oldUser.mode };
+    const oldUser = this.users[nick];
+    if (oldUser == null || this.usersTreeView == null) return;
+    delete this.users[nick];
+    this.users[newNick] = { nickname: newNick, mode: oldUser.mode };
 
-    const userElt = this.usersTreeView.treeRoot.querySelector(`li[data-nickname="${event.nick}"]`) as HTMLLIElement;
-    userElt.dataset["nickname"] = event.new;
-    userElt.querySelector(".nickname").textContent = event.new;
+    const userElt = this.usersTreeView.treeRoot.querySelector(`li[data-nickname="${nick}"]`) as HTMLLIElement;
+    userElt.dataset["nickname"] = newNick;
+    userElt.querySelector(".nickname").textContent = newNick;
   }
 
-  onMode(event: SlateIRC.ModeEvent) {
-    const user = this.users[event.client];
-    if (user == null) return;
+  onMode(modes: { mode: string; param?: string }[]) {
+    for (const { mode, param } of modes) {
+      const user = param != null ? this.users[param] : null;
+      if (user == null) continue;
 
-    let addingMode = true;
-
-    for (const c of event.mode) {
-      if (c === "+") addingMode = true;
-      else if (c === "-") addingMode = false;
-      else {
+      const adding = mode[0] !== "-";
+      for (const c of mode.replace(/^[+-]/, "")) {
         const index = user.mode.indexOf(c);
-        if (addingMode && index === -1) user.mode += c;
-        else if (!addingMode && index !== -1) user.mode = user.mode.substring(0, index) + user.mode.substring(index + 1);
+        if (adding && index === -1) user.mode += c;
+        else if (!adding && index !== -1) user.mode = user.mode.substring(0, index) + user.mode.substring(index + 1);
       }
+
+      const userElt = this.usersTreeView.treeRoot.querySelector(`li[data-nickname="${param}"]`) as HTMLLIElement;
+      userElt.querySelector(".mode").textContent = this.getModeSymbol(user.mode);
     }
-
-    const userElt = this.usersTreeView.treeRoot.querySelector(`li[data-nickname="${event.client}"]`) as HTMLLIElement;
-    userElt.querySelector(".mode").textContent = this.getModeSymbol(user.mode);
   }
 
-  onAway(event: SlateIRC.AwayEvent) {
-    if (event.message.length > 0) this.addInfo(`${event.nick} is now away: ${event.message}.`);
-    else this.addInfo(`${event.nick} is now back: ${event.message}.`);
+  onAway(nick: string, message: string) {
+    if (message.length > 0) this.addInfo(`${nick} is now away: ${message}.`);
+    else this.addInfo(`${nick} is now back.`);
   }
 
-  onQuit(event: SlateIRC.QuitEvent) {
-    this.addInfo(`${event.nick} has quit (${event.message}).`);
-    this.removeUser(event.nick);
+  onQuit(nick: string, message: string) {
+    this.addInfo(`${nick} has quit (${message}).`);
+    this.removeUser(nick);
   }
 
   private onTextAreaKeyDown = (event: KeyboardEvent) => {
@@ -399,21 +392,15 @@ export default class ChatTab {
     }
   }
 
-  private onChannelNamesReceived = (error: Error, names: { name: string; mode: string; }[]) => {
-    if (error != null) {
-      this.addInfo(`Channel names error: ${error.message}`);
-      return;
-    }
+  onUserList(users: { nick: string; modes: string[] }[]) {
+    if (this.usersTreeView == null) return;
 
     this.users = {};
     this.usersTreeView.treeRoot.innerHTML = "";
-    names.sort((a, b) => a.name.localeCompare(b.name));
-    for (const name of names) {
-      let mode = "";
-      if (name.mode.indexOf("@") !== -1) mode += "o";
-      if (name.mode.indexOf("+") !== -1) mode += "v";
-
-      this.addUser(name.name, mode);
+    users.sort((a, b) => a.nick.localeCompare(b.nick));
+    for (const user of users) {
+      const mode = user.modes.filter((mode) => mode === "o" || mode === "v").join("");
+      this.addUser(user.nick, mode);
     }
 
     if (this.waitingForTopic) {

@@ -1,13 +1,12 @@
-import * as fs from "fs";
-import * as electron from "electron";
-import * as remote from "@electron/remote";
+import { api, appInfo } from "../api";
+import type { WebviewTag } from "electron";
+import type { ServerEntry } from "../../shared/types";
 
-import fetch, { FetchError } from "../../shared/fetch";
+import fetch, { FetchError } from "../fetch";
 import * as i18n from "../../shared/i18n";
 
 import { tabStrip, panesElt, clearActiveTab } from "./index";
 
-const { superpowers: { appApiVersion: appApiVersion } } = JSON.parse(fs.readFileSync(`${remote.app.getAppPath()}/package.json`, { encoding: "utf8" }));
 
 export default function openServer(serverEntry: ServerEntry) {
   clearActiveTab();
@@ -116,13 +115,13 @@ function makeServerPane(serverEntry: ServerEntry) {
       return;
     }
 
-    if (serverInfo.appApiVersion !== appApiVersion) {
-      statusElt.textContent = i18n.t("common:server.errors.incompatibleVersion", { baseUrl, serverVersion: serverInfo.appApiVersion, appVersion: appApiVersion });
+    if (serverInfo.appApiVersion !== appInfo.appApiVersion) {
+      statusElt.textContent = i18n.t("common:server.errors.incompatibleVersion", { baseUrl, serverVersion: serverInfo.appApiVersion, appVersion: appInfo.appApiVersion });
       retryButton.hidden = false;
       return;
     }
 
-    const webviewElt = document.createElement("webview");
+    const webviewElt = document.createElement("webview") as WebviewTag;
     // NOTE: The SupApp preload is set by the main process in "will-attach-webview"
 
     function clearEventListeners() {
@@ -150,8 +149,8 @@ function makeServerPane(serverEntry: ServerEntry) {
 
     const buildHostnameAndPort = `${hostname}:${serverInfo.buildPort}`;
     const auth = { username: "superpowers", password: serverEntry.password };
-    electron.ipcRenderer.send("set-http-auth", hostnameAndPort, auth);
-    electron.ipcRenderer.send("set-http-auth", buildHostnameAndPort, auth);
+    api.send("app:set-http-auth", hostnameAndPort, auth);
+    api.send("app:set-http-auth", buildHostnameAndPort, auth);
   }
 
   tryConnecting();

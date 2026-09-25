@@ -38,6 +38,10 @@
       "notSuperpowers": "The server at ${baseUrl} doesn't seem to be running Superpowers.",
       "incompatibleVersion": "The server at ${baseUrl} runs an incompatible version of Superpowers (got app API version ${serverVersion}, expected ${appVersion})."
     }
+  },
+
+  "chat": {
+    "liberaMigration": "Community chat has moved from freenode to Libera.Chat. Your saved chatrooms will reconnect there."
   }
 }
 

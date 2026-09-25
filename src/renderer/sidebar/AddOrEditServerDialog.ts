@@ -1,5 +1,6 @@
 import { BaseDialog } from "simple-dialogs";
 import * as i18n from "../../shared/i18n";
+import type { ServerEntry } from "../../shared/types";
 
 type AddOrEditOptions = {
   validationLabel: string;

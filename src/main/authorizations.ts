@@ -1,139 +1,111 @@
-import * as electron from "electron";
-import * as fs from "fs";
-import * as path from "path";
+// File system authorizations for the SupApp API (see src/preload/supapp.ts).
+// Pages can only read/write files or folders the user picked, per origin.
 
-let authorizationsByOrigin: { [origin: string]: { folders: string[]; rwFiles: string[]; exeFiles: string[] } } = {};
+import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent, type WebContents } from "electron";
+import { readFileSync } from "node:fs";
+import { join, normalize, sep } from "node:path";
+import { writeFileAtomic } from "./settings";
+
+export type Access = "readWrite" | "execute";
+
+interface OriginAuthorizations {
+  folders: string[];
+  rwFiles: string[];
+  exeFiles: string[];
+}
+
+let authorizationsByOrigin: { [origin: string]: OriginAuthorizations } = {};
 
 export function loadAuthorizations(dataPath: string) {
   try {
-    const authorizationsByOriginJSON = fs.readFileSync(`${dataPath}/authorizationsByOrigin.json`, { encoding: "utf8" });
-    authorizationsByOrigin = JSON.parse(authorizationsByOriginJSON);
-    if (authorizationsByOrigin == null || typeof authorizationsByOrigin !== "object") authorizationsByOrigin = {};
-  } catch (err) {
-    // Ignore
+    const parsed = JSON.parse(readFileSync(join(dataPath, "authorizationsByOrigin.json"), "utf8"));
+    if (parsed != null && typeof parsed === "object") authorizationsByOrigin = parsed;
+  } catch {
+    // Nothing authorized yet
   }
 }
 
-export function saveAuthorizations(dataPath: string) {
-  fs.writeFileSync(`${dataPath}/authorizationsByOrigin.json`, JSON.stringify(authorizationsByOrigin, null, 2));
+export async function saveAuthorizations(dataPath: string) {
+  await writeFileAtomic(join(dataPath, "authorizationsByOrigin.json"), JSON.stringify(authorizationsByOrigin, null, 2));
 }
 
 function getAuthorizationsForOrigin(origin: string) {
-  let authorizations = authorizationsByOrigin[origin];
-  if (authorizations == null)
-    authorizations = authorizationsByOrigin[origin] = { folders: [], rwFiles: [], exeFiles: [] };
-
-  return authorizations;
+  authorizationsByOrigin[origin] ??= { folders: [], rwFiles: [], exeFiles: [] };
+  return authorizationsByOrigin[origin];
 }
 
-electron.ipcMain.on("setup-key", onSetupKey);
-electron.ipcMain.on("choose-folder", onChooseFolder);
-electron.ipcMain.on("choose-file", onChooseFile);
-electron.ipcMain.on("authorize-folder", onAuthorizeFolder);
-electron.ipcMain.on("check-path-authorization", onCheckPathAuthorization);
-electron.ipcMain.on("send-message", onSendMessage);
-
-const secretKeys = new Map<Electron.WebContents, string[]>();
-
-function onSetupKey(event: Electron.IpcMainEvent, secretKey: string) {
-  let keys = secretKeys.get(event.sender);
-
-  if (keys == null) {
-    keys = [];
-    secretKeys.set(event.sender, keys);
-  }
-
-  keys.push(secretKey);
+export function authorizeFolder(origin: string, folderPath: string) {
+  getAuthorizationsForOrigin(origin).folders.push(normalize(folderPath));
 }
 
-function onChooseFolder(event: Electron.IpcMainEvent, secretKey: string, ipcId: string, origin: string) {
-  if (!secretKeys.get(event.sender).includes(secretKey)) return;
-
-  const promise = electron.dialog.showOpenDialog({ properties: ["openDirectory"] });
-  promise.then((result) => {
-    if (result.canceled) {
-      event.sender.send("choose-folder-callback", ipcId, null);
-      return;
-    }
-
-    const normalizedPath = path.normalize(result.filePaths[0]);
-    getAuthorizationsForOrigin(origin).folders.push(normalizedPath);
-
-    event.sender.send("choose-folder-callback", ipcId, normalizedPath);
-  });
+export function authorizeFile(origin: string, filePath: string, access: Access) {
+  const authorizations = getAuthorizationsForOrigin(origin);
+  (access === "execute" ? authorizations.exeFiles : authorizations.rwFiles).push(normalize(filePath));
 }
 
-function onChooseFile(
-  event: Electron.IpcMainEvent,
-  secretKey: string,
-  ipcId: string,
-  origin: string,
-  access: "readWrite" | "execute"
-) {
-  if (!secretKeys.get(event.sender).includes(secretKey)) return;
-
-  const promise = electron.dialog.showOpenDialog({ properties: ["openFile"] });
-  promise.then((result) => {
-    if (result.canceled) {
-      event.sender.send("choose-file-callback", ipcId, null);
-      return;
-    }
-
-    const normalizedPath = path.normalize(result.filePaths[0]);
-    const auths = getAuthorizationsForOrigin(origin);
-
-    if (access === "execute") auths.exeFiles.push(normalizedPath);
-    else auths.rwFiles.push(normalizedPath);
-
-    event.sender.send("choose-file-callback", ipcId, normalizedPath);
-  });
-}
-
-function onAuthorizeFolder(
-  event: Electron.IpcMainEvent,
-  secretKey: string,
-  ipcId: string,
-  origin: string,
-  folderPath: string
-) {
-  const normalizedPath = path.normalize(folderPath);
-  getAuthorizationsForOrigin(origin).folders.push(normalizedPath);
-
-  event.sender.send("authorize-folder-callback", ipcId);
-}
-
-function onCheckPathAuthorization(
-  event: Electron.IpcMainEvent,
-  secretKey: string,
-  ipcId: string,
-  origin: string,
-  pathToCheck: string
-) {
-  if (!secretKeys.get(event.sender).includes(secretKey)) return;
-
-  const normalizedPath = path.normalize(pathToCheck);
-
+/** Files inside an authorized folder are read/write; execution must be authorized per file */
+export function checkPathAuthorization(origin: string, pathToCheck: string): Access | null {
+  const normalizedPath = normalize(pathToCheck);
   const authorizations = getAuthorizationsForOrigin(origin);
 
-  let canReadWrite = authorizations.rwFiles.indexOf(normalizedPath) !== -1;
-  const canExecute = authorizations.exeFiles.indexOf(normalizedPath) !== -1;
-
-  if (!canReadWrite) {
-    for (const authorizedFolderPath of authorizations.folders) {
-      if (normalizedPath.indexOf(authorizedFolderPath + path.sep) === 0) {
-        canReadWrite = true;
-        break;
-      }
-    }
+  if (authorizations.rwFiles.includes(normalizedPath)) return "readWrite";
+  for (const folderPath of authorizations.folders) {
+    if (normalizedPath.startsWith(folderPath.endsWith(sep) ? folderPath : folderPath + sep)) return "readWrite";
   }
-
-  const authorization = canReadWrite ? "readWrite" : canExecute ? "execute" : null;
-  event.sender.send("check-path-authorization-callback", ipcId, normalizedPath, authorization);
+  if (authorizations.exeFiles.includes(normalizedPath)) return "execute";
+  return null;
 }
 
-function onSendMessage(event: Electron.Event, windowId: number, message: string, args: any[] = []) {
-  const window = electron.BrowserWindow.fromId(windowId);
-  if (window == null) return;
+export function resetAuthorizations() {
+  authorizationsByOrigin = {};
+}
 
-  window.webContents.send(`sup-app-message-${message}`, ...args);
+// IPC from the SupApp preload. Each page registers a random secret key first,
+// and every later request must present one of its keys.
+const secretKeys = new WeakMap<WebContents, string[]>();
+
+function checkKey(event: IpcMainInvokeEvent, secretKey: string) {
+  if (!secretKeys.get(event.sender)?.includes(secretKey)) throw new Error("Invalid SupApp key");
+}
+
+export function setupSupAppIpc(showMainWindow: () => void) {
+  ipcMain.on("sup-app:setup-key", (event, secretKey: string) => {
+    const keys = secretKeys.get(event.sender) ?? [];
+    keys.push(secretKey);
+    secretKeys.set(event.sender, keys);
+  });
+
+  ipcMain.handle("sup-app:choose-folder", async (event, secretKey: string, origin: string) => {
+    checkKey(event, secretKey);
+    const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+    if (result.canceled) return null;
+
+    authorizeFolder(origin, result.filePaths[0]);
+    return normalize(result.filePaths[0]);
+  });
+
+  ipcMain.handle("sup-app:choose-file", async (event, secretKey: string, origin: string, access: Access) => {
+    checkKey(event, secretKey);
+    const result = await dialog.showOpenDialog({ properties: ["openFile"] });
+    if (result.canceled) return null;
+
+    authorizeFile(origin, result.filePaths[0], access);
+    return normalize(result.filePaths[0]);
+  });
+
+  ipcMain.handle("sup-app:authorize-temp-folder", (event, secretKey: string, origin: string, folderPath: string) => {
+    checkKey(event, secretKey);
+    authorizeFolder(origin, folderPath);
+  });
+
+  ipcMain.handle("sup-app:check-path", (event, secretKey: string, origin: string, pathToCheck: string) => {
+    checkKey(event, secretKey);
+    return { normalizedPath: normalize(pathToCheck), access: checkPathAuthorization(origin, pathToCheck) };
+  });
+
+  ipcMain.on("sup-app:send-message", (_event, windowId: number, message: string, args: unknown[] = []) => {
+    BrowserWindow.fromId(windowId)?.webContents.send(`sup-app-message-${message}`, ...args);
+  });
+
+  ipcMain.on("sup-app:show-main-window", () => showMainWindow());
 }

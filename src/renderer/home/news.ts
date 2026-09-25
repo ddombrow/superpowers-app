@@ -1,4 +1,4 @@
-import fetch from "../../shared/fetch";
+import fetch from "../fetch";
 import * as i18n from "../../shared/i18n";
 
 export function start() {

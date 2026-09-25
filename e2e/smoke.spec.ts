@@ -1,13 +1,30 @@
 import { expect, test } from "@playwright/test";
-import { launchApp } from "./fixtures";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { findProcesses, launchApp } from "./fixtures";
 
-test("first launch: welcome dialog, skip game install, local server starts", async () => {
-  const { app, window, cleanup } = await launchApp();
+test("first launch: welcome, local server, hub webview with SupApp, clean quit", async () => {
+  const { app, window, dataPath, quit, cleanup } = await launchApp();
   const pageErrors: string[] = [];
   window.on("pageerror", (err) => pageErrors.push(err.message));
 
   try {
     await expect(window).toHaveTitle("Superpowers");
+
+    // Electron's profile stays out of the Superpowers data (projects, settings...)
+    expect(await app.evaluate(({ app }) => app.getPath("userData"))).toBe(join(dataPath, ".electron-profile"));
+
+    // The launcher UI is sandboxed: no Node.js, only the preload's API
+    expect(
+      await window.evaluate(() => {
+        const globals = window as unknown as Record<string, object | undefined>;
+        return {
+          require: typeof globals.require,
+          process: typeof globals.process,
+          api: Object.keys(globals.api ?? {}).sort()
+        };
+      })
+    ).toEqual({ require: "undefined", process: "undefined", api: ["invoke", "on", "send"] });
 
     const nicknameField = window.locator("#nickname-field");
     await expect(nicknameField).toBeVisible({ timeout: 60_000 });
@@ -63,6 +80,12 @@ test("first launch: welcome dialog, skip game install, local server starts", asy
     await window.screenshot({ path: "test-results/screens/04-server-hub.png" });
 
     expect(pageErrors).toEqual([]);
+
+    // Quitting stops the local server and saves the settings
+    expect(findProcesses(dataPath)).toContainEqual(expect.stringContaining("server/index.js"));
+    expect(await quit()).toEqual([]);
+    const settings = JSON.parse(readFileSync(join(dataPath, "settings.json"), "utf8"));
+    expect(settings).toMatchObject({ version: 2, nickname: "E2ETester", presence: "offline" });
   } finally {
     await cleanup();
   }

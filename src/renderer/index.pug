@@ -65,11 +65,4 @@ html
     .waiting-game-install.dialog(hidden)
       label= t("welcome:askGameInstall.waiting")
 
-    script.
-      // Workaround some error with module generation. See https://github.com/Microsoft/TypeScript/issues/14351
-      const exports = {};
-
-      window.addEventListener("keyup", (event) => {
-        if (event.keyCode === 123 /* F12 */) require("@electron/remote").getCurrentWindow().webContents.openDevTools();
-      });
     script(src="index.js")

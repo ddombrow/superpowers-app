@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as electron from "electron";
+import { api } from "../api";
 import * as settings from "../settings";
+import type { ServerConfig } from "../../shared/types";
 import * as i18n from "../../shared/i18n";
 
 import * as systems from "./systems";
@@ -24,8 +24,8 @@ const passwordRowElt = settingsElt.querySelector("li.password") as HTMLLIElement
 const passwordElt = passwordRowElt.querySelector("input") as HTMLInputElement;
 const showOrHidePasswordElt = passwordRowElt.querySelector("button") as HTMLButtonElement;
 
-export function start() {
-  config = getServerConfig();
+export async function start() {
+  config = await api.invoke("server-config:load");
 
   if (config == null) {
     (settingsElt.querySelector(".error") as HTMLElement).hidden = false;
@@ -62,42 +62,8 @@ export function enable(enabled: boolean) {
   disabledElt.hidden = enabled;
 }
 
-interface ServerConfig {
-  serverName: string;
-  mainPort: number;
-  buildPort: number;
-  password: string;
-  maxRecentBuilds: number;
-  [key: string]: any;
-}
-
-function getServerConfig() {
-  let defaultConfig: ServerConfig;
-  try {
-    /* tslint:disable */
-    defaultConfig = require(`${settings.corePath}/server/config.js`).defaults;
-    /* tslint:enable */
-  } catch (err) {
-    return null;
-  }
-
-  let localConfig: ServerConfig;
-  try {
-    localConfig = JSON.parse(fs.readFileSync(`${settings.userDataPath}/config.json`, { encoding: "utf8" }));
-  } catch (err) { /* Ignore */ }
-  if (localConfig == null) localConfig = {} as any;
-
-  const config: ServerConfig = {} as any;
-  for (const key in defaultConfig) {
-    if (localConfig[key] != null) config[key] = localConfig[key];
-    else config[key] = defaultConfig[key];
-  }
-
-  return config;
-}
-
 function onOpenProjectsFolderClick() {
-  electron.shell.openExternal(`${settings.userDataPath}/projects/`);
+  api.send("app:open-projects-folder");
 }
 
 function onChangeAutoStartServer() {
@@ -136,23 +102,13 @@ function onShowOrHidePassword() {
   }
 }
 
-let scheduleSaveTimeoutId: ReturnType<typeof setTimeout>;
-export function scheduleSave() {
-  if (scheduleSaveTimeoutId != null) return;
-  scheduleSaveTimeoutId = setTimeout(applyScheduledSave, 30 * 1000);
-}
-
-export function applyScheduledSave() {
-  if (scheduleSaveTimeoutId == null) return;
-
+/** Sends the config to the main process, which saves it before the server starts */
+function scheduleSave() {
   config.serverName = serverNameElt.value.length > 0 ? serverNameElt.value : null;
   config.mainPort = parseInt(mainPortElt.value, 10);
   config.buildPort = parseInt(buildPortElt.value, 10);
   config.password = passwordElt.value;
   config.maxRecentBuilds = parseInt(maxRecentBuildsElt.value, 10);
 
-  fs.writeFileSync(`${settings.userDataPath}/config.json`, JSON.stringify(config, null, 2) + "\n", { encoding: "utf8" });
-
-  clearTimeout(scheduleSaveTimeoutId);
-  scheduleSaveTimeoutId = null;
+  api.send("server-config:save", config);
 }

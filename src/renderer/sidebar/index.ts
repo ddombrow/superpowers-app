@@ -1,9 +1,10 @@
 import "./me";
 
-import * as ResizeHandle from "resize-handle";
-import * as TreeView from "dnd-tree-view";
+import ResizeHandle from "resize-handle";
+import TreeView from "dnd-tree-view";
 import { ConfirmDialog } from "simple-dialogs";
 import * as i18n from "../../shared/i18n";
+import type { ServerEntry } from "../../shared/types";
 
 import AddAddOrEditServerDialog from "./AddOrEditServerDialog";
 import * as settings from "../settings";

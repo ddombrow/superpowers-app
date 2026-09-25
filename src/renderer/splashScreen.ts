@@ -1,8 +1,9 @@
-import * as updateManager from "./updateManager";
-
 const loadingElt = document.querySelector(".loading") as HTMLDivElement;
 const appVersionElt = loadingElt.querySelector(".version") as HTMLDivElement;
-appVersionElt.textContent = updateManager.appVersion;
+
+export function setAppVersion(version: string) {
+  appVersionElt.textContent = version;
+}
 
 const splashElt = loadingElt.querySelector(".splash") as HTMLImageElement;
 const statusElt = loadingElt.querySelector(".status") as HTMLDivElement;

@@ -9,6 +9,6 @@
     "noImplicitAny": true,
     "noUnusedLocals": true,
     "isolatedModules": true,
-    "strict": false
+    "strict": true
   }
 }

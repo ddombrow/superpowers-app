@@ -1,65 +1,89 @@
-import * as electron from "electron";
-import * as yargs from "yargs";
-import * as path from "path";
-import * as fs from "fs";
+import { app } from "electron";
+import { existsSync, renameSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { LocalizedError } from "../shared/i18n";
 
-const argv = yargs.usage("Usage: $0 [options]").describe("core-path", "Path to Superpowers core").argv;
+export interface Paths {
+  corePath: string;
+  userDataPath: string;
+}
 
-export default function getPaths(callback: (err: LocalizedError, corePath?: string, dataPath?: string) => void) {
-  let dataPath: string;
+/**
+ * `--core-path=<folder>` runs against a core checkout (or any folder) and
+ * stores all user data there too. Otherwise, data lives in the OS app data
+ * folder and core is installed in its "core" subfolder.
+ */
+export async function getPaths(argv = process.argv): Promise<Paths> {
+  const corePathArg = getCorePathArg(argv);
+  if (corePathArg != null) return { corePath: corePathArg, userDataPath: corePathArg };
 
-  let corePath = argv["core-path"] != null ? path.resolve(argv["core-path"] as string) : null;
-  if (corePath != null) {
-    dataPath = corePath;
-    process.nextTick(() => {
-      callback(null, corePath, dataPath);
-    });
-    return;
+  let userDataPath: string;
+  try {
+    userDataPath = join(app.getPath("appData"), "Superpowers");
+  } catch (err) {
+    throw new LocalizedError("startup:errors.couldNotGetDataPath", { details: (err as Error).message });
   }
+
+  if (!existsSync(userDataPath)) migrateOldDataFolder(userDataPath);
 
   try {
-    dataPath = path.join(electron.app.getPath("appData"), "Superpowers");
+    await mkdir(userDataPath, { recursive: true });
   } catch (err) {
-    process.nextTick(() => {
-      callback(new LocalizedError("startup:errors.couldNotGetDataPath", { details: err.message }));
+    throw new LocalizedError("startup:errors.couldNotCreateUserDataFolder", {
+      dataPath: userDataPath,
+      reason: (err as Error).message
     });
-    return;
   }
 
-  console.log(dataPath);
+  return { corePath: join(userDataPath, "core"), userDataPath };
+}
 
-  if (!fs.existsSync(dataPath)) {
-    // This is the old custom logic we used to determine the appData folder
-    // so if the new data folder doesn't exist, we'll try to migrate from the old one
-    let oldDataPath: string;
-
-    switch (process.platform) {
-      case "win32":
-        if (process.env.APPDATA != null) oldDataPath = path.join(process.env.APPDATA, "Superpowers");
-        break;
-      case "darwin":
-        if (process.env.HOME != null) oldDataPath = path.join(process.env.HOME, "Library", "Superpowers");
-        break;
-      default:
-        if (process.env.XDG_DATA_HOME != null) oldDataPath = path.join(process.env.XDG_DATA_HOME, "Superpowers");
-        else if (process.env.HOME != null) oldDataPath = path.join(process.env.HOME, ".local/share", "Superpowers");
-    }
-
-    if (oldDataPath != null && fs.existsSync(oldDataPath)) {
-      console.log(`Migrating data from ${oldDataPath} to ${dataPath}...`);
-      fs.renameSync(oldDataPath, dataPath);
-    }
-  }
-
-  corePath = path.join(dataPath, "core");
-
-  fs.mkdir(dataPath, (err) => {
-    if (err != null && err.code !== "EEXIST") {
-      callback(new LocalizedError("startup:errors.couldNotCreateUserDataFolder", { dataPath, reason: err.message }));
-      return;
-    }
-
-    callback(null, corePath, dataPath);
+export function getCorePathArg(argv = process.argv): string | null {
+  const { values } = parseArgs({
+    args: argv.slice(1),
+    options: { "core-path": { type: "string" } },
+    strict: false,
+    allowPositionals: true
   });
+
+  const corePathArg = values["core-path"];
+  return typeof corePathArg === "string" ? resolve(corePathArg) : null;
+}
+
+/**
+ * Electron's own profile (caches, local storage...) must not end up in the
+ * Superpowers data folder, which it would by default since the app is named "Superpowers".
+ * Must be called before the app is ready.
+ */
+export function setupElectronProfilePath(argv = process.argv) {
+  const corePathArg = getCorePathArg(argv);
+  app.setPath(
+    "userData",
+    corePathArg != null ? join(corePathArg, ".electron-profile") : join(app.getPath("appData"), "superpowers-app")
+  );
+}
+
+/** Very old versions picked the data folder themselves */
+function migrateOldDataFolder(userDataPath: string) {
+  const { APPDATA, HOME, XDG_DATA_HOME } = process.env;
+  let oldDataPath: string | null = null;
+
+  switch (process.platform) {
+    case "win32":
+      if (APPDATA != null) oldDataPath = join(APPDATA, "Superpowers");
+      break;
+    case "darwin":
+      if (HOME != null) oldDataPath = join(HOME, "Library", "Superpowers");
+      break;
+    default:
+      if (XDG_DATA_HOME != null) oldDataPath = join(XDG_DATA_HOME, "Superpowers");
+      else if (HOME != null) oldDataPath = join(HOME, ".local/share", "Superpowers");
+  }
+
+  if (oldDataPath != null && existsSync(oldDataPath)) {
+    console.log(`Migrating data from ${oldDataPath} to ${userDataPath}...`);
+    renameSync(oldDataPath, userDataPath);
+  }
 }

@@ -4,9 +4,9 @@
     "module": "CommonJS",
     "moduleResolution": "Node10",
     "ignoreDeprecations": "6.0",
-    "esModuleInterop": false,
     "rootDir": "src",
-    "outDir": "out/legacy"
+    "outDir": "out/legacy",
+    "strict": false
   },
   "include": ["src/renderer", "src/shared"],
   "exclude": ["src/**/*.test.ts"]

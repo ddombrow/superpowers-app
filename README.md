@@ -28,8 +28,14 @@ npm run package    # installers for the current platform, in ./dist
 
 Project layout:
 
-- `src/main/`: Electron main process
+- `src/main/`: Electron main process. Owns everything that touches the system: settings, the local
+  server and other core processes, core installs & updates, community chat (IRC) and file authorizations
+- `src/preload/app.ts`: exposes the channels declared in `src/shared/ipc-contract.ts` to the launcher UI,
+  which runs sandboxed with no Node.js access
 - `src/preload/supapp.ts`: the `SupApp` API injected into server & project webviews ([compatibility notes](docs/supapp-compat.md))
 - `src/renderer/`: launcher UI (legacy Pug/Stylus, being replaced)
-- `src/shared/`: code shared between processes
+- `src/shared/`: types and code shared between processes
 - `resources/`: icons and locales
+
+With `--core-path=<folder>` (as `npm run dev` does), all data lives in that folder, including
+Electron's profile in `<folder>/.electron-profile`.

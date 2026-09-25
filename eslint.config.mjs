@@ -13,8 +13,7 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
-      // TODO: Make this an error once main & preload are ported to strict mode
-      "@typescript-eslint/no-explicit-any": "warn"
+      "@typescript-eslint/no-explicit-any": "error"
     }
   },
   {
@@ -23,9 +22,9 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-require-imports": "off" }
   },
   {
-    // SupApp's public surface is a namespace; keep it as-is for compatibility
+    // SupApp's public surface is a namespace taking arbitrary values from core; keep it as-is for compatibility
     files: ["src/preload/supapp.ts"],
     languageOptions: { globals: { ...globals.browser } },
-    rules: { "@typescript-eslint/no-namespace": "off" }
+    rules: { "@typescript-eslint/no-namespace": "off", "@typescript-eslint/no-explicit-any": "off" }
   }
 );

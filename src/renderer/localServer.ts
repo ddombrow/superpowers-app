@@ -1,17 +1,21 @@
-import { ChildProcess } from "child_process";
-import forkServerProcess from "./forkServerProcess";
+import { api } from "./api";
 import * as settings from "./settings";
 import * as i18n from "../shared/i18n";
 import openServerSettings from "./tabs/openServerSettings";
 import * as serverSettings from "./serverSettings";
 import { append as appendToLog } from "./serverSettings/log";
+import type { LocalServerStatus } from "../shared/types";
 
-let serverProcess: ChildProcess;
+let status: LocalServerStatus = "stopped";
+let updating = false;
 
 const localServerElt = document.querySelector(".local-server") as HTMLDivElement;
 const statusElt = localServerElt.querySelector(".status") as HTMLDivElement;
 const startStopServerButton = localServerElt.querySelector(".start-stop") as HTMLButtonElement;
 const settingsButton = localServerElt.querySelector(".settings") as HTMLButtonElement;
+
+api.on("local-server:status", onStatus);
+api.on("local-server:log", appendToLog);
 
 export function start() {
   startStopServerButton.addEventListener("click", startStopServer);
@@ -21,69 +25,39 @@ export function start() {
 }
 
 function startStopServer() {
-  if (serverProcess == null) startServer();
+  if (status === "stopped") startServer();
   else stopServer();
 }
 
 function startServer() {
-  if (serverProcess != null) return;
-
-  statusElt.textContent = i18n.t("server:status.starting");
-  startStopServerButton.textContent = i18n.t("server:buttons.stop");
-
-  serverSettings.enable(false);
-  serverSettings.applyScheduledSave();
-
-  serverProcess = forkServerProcess([ "start" ]);
-  serverProcess.on("exit", onServerExit);
-  serverProcess.on("message", onServerMessage);
-  serverProcess.stdout.on("data", (data: any) => { appendToLog(String(data)); });
-  serverProcess.stderr.on("data", (data: any) => { appendToLog(String(data)); });
-}
-
-let shutdownCallback: Function;
-export function shutdown(callback: Function) {
-  if (serverProcess == null) { callback(); return; }
-  shutdownCallback = callback;
-  stopServer();
-}
-
-export function setServerUpdating(updating: boolean) {
-  startStopServerButton.disabled = updating;
-  statusElt.textContent = i18n.t(`server:status.${updating ? "updating" : "stopped"}`);
+  if (status !== "stopped") return;
+  api.send("local-server:start");
 }
 
 export function stopServer() {
-  if (serverProcess == null) return;
-
-  statusElt.textContent = i18n.t("server:status.stopping");
-  startStopServerButton.textContent = i18n.t("server:buttons.start");
-  startStopServerButton.disabled = true;
-  serverProcess.send("stop");
+  if (status === "stopped" || status === "stopping") return;
+  api.send("local-server:stop");
 }
 
-function onServerExit() {
-  serverProcess = null;
-
-  statusElt.textContent = i18n.t("server:status.stopped");
-  startStopServerButton.textContent = i18n.t("server:buttons.start");
-  startStopServerButton.disabled = false;
-  serverSettings.enable(true);
-
-  appendToLog("\n");
-
-  if (shutdownCallback != null) {
-    shutdownCallback();
-    shutdownCallback = null;
-  }
+function onStatus(newStatus: LocalServerStatus) {
+  status = newStatus;
+  serverSettings.enable(status === "stopped");
+  updateUI();
 }
 
-function onServerMessage(msg: any) {
-  if (typeof msg !== "object") return;
+export function setServerUpdating(isUpdating: boolean) {
+  updating = isUpdating;
+  updateUI();
+}
 
-  switch (msg.type) {
-    case "started":
-      statusElt.textContent = i18n.t("server:status.started");
-      break;
+function updateUI() {
+  if (updating && status === "stopped") {
+    statusElt.textContent = i18n.t("server:status.updating");
+    startStopServerButton.disabled = true;
+    return;
   }
+
+  statusElt.textContent = i18n.t(`server:status.${status}`);
+  startStopServerButton.textContent = i18n.t(`server:buttons.${status === "stopped" ? "start" : "stop"}`);
+  startStopServerButton.disabled = status === "stopping";
 }

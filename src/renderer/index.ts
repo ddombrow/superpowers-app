@@ -1,9 +1,8 @@
-import * as electron from "electron";
-import * as remote from "@electron/remote";
 import * as dialogs from "simple-dialogs";
 import * as async from "async";
 
 import * as i18n from "../shared/i18n";
+import { api, appInfo, setAppInfo } from "./api";
 import * as settings from "./settings";
 import * as splashScreen from "./splashScreen";
 import * as updateManager from "./updateManager";
@@ -18,34 +17,36 @@ import * as localServer from "./localServer";
 import * as chat from "./chat";
 import WelcomeDialog from "./WelcomeDialog";
 
-electron.ipcRenderer.on("init", onInitialize);
-electron.ipcRenderer.on("quit", onQuit);
-
 const namespaces = [
   "common", "startup",
   "sidebar", "server",
   "welcome", "home"
 ];
 
-function onInitialize(sender: any, corePath: string, userDataPath: string, languageCode: string) {
-  settings.setPaths(corePath, userDataPath);
-  i18n.setLocalesPath(`${remote.app.getAppPath()}/resources/locales`);
-  i18n.setLanguageCode(languageCode);
-  i18n.load(namespaces, () => { settings.load(onSettingsLoaded); });
+window.addEventListener("keyup", (event) => {
+  if (event.key === "F12") api.send("app:open-dev-tools");
+});
+
+initialize();
+
+async function initialize() {
+  const info = await api.invoke("app:get-info");
+  setAppInfo(info);
+  splashScreen.setAppVersion(info.appVersion);
+
+  i18n.setLanguageCode(info.languageCode);
+  const { contexts, fallbackContexts } = await api.invoke("app:get-locales", namespaces);
+  i18n.addContexts(contexts, fallbackContexts);
+
+  const settingsError = await settings.load();
+  onSettingsLoaded(settingsError);
 }
 
-function onQuit() {
-  serverSettings.applyScheduledSave();
-  settings.applyScheduledSave();
-
-  localServer.shutdown(() => { electron.ipcRenderer.send("ready-to-quit"); });
-}
-
-function onSettingsLoaded(err: Error) {
-  if (err != null) {
+function onSettingsLoaded(error: string | null) {
+  if (error != null) {
     const label = i18n.t("startup:errors.couldNotLoadSettings", {
-      settingsPath: `${settings.userDataPath}/settings.json`,
-      reason: err.message
+      settingsPath: `${appInfo.userDataPath}/settings.json`,
+      reason: error
     });
     const options = {
       validationLabel: i18n.t("startup:startAnyway"),
@@ -54,20 +55,20 @@ function onSettingsLoaded(err: Error) {
 
     new dialogs.ConfirmDialog(label, options, (shouldProceed) => {
       if (!shouldProceed) {
-        remote.app.quit();
+        api.send("app:quit");
         return;
       }
 
-      updateManager.checkForUpdates(start);
+      updateManager.checkForUpdates().then(start);
     });
     return;
   }
 
-  updateManager.checkForUpdates(start);
+  updateManager.checkForUpdates().then(start);
 }
 
-function start() {
-  serverSettings.start();
+async function start() {
+  await serverSettings.start();
   sidebar.start();
   home.start();
 
@@ -76,6 +77,7 @@ function start() {
       async.series([showWelcomeDialog, installFirstSystem]);
     } else {
       me.start();
+      if (settings.notices.includes("liberaMigration")) new dialogs.InfoDialog(i18n.t("common:chat.liberaMigration"));
       chat.start();
 
       updateSystemsAndPlugins();

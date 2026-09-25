@@ -1,11 +1,11 @@
 // Builds the legacy (Pug + Stylus + CommonJS) renderer into out/legacy.
 // Temporary: this goes away once the Svelte renderer replaces it.
 
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as esbuild from "esbuild";
 
 const require = createRequire(import.meta.url);
 const pug = require("pug");
@@ -15,11 +15,19 @@ const i18n = require("./i18n.js");
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "src/renderer");
 const outDir = join(root, "out/legacy/renderer");
+rmSync(join(root, "out/legacy"), { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
-// TypeScript
-execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"), "-p", join(root, "tsconfig.legacy.json")], {
-  stdio: "inherit"
+// TypeScript, bundled for the sandboxed window (no Node.js available)
+await esbuild.build({
+  entryPoints: [join(srcDir, "index.ts")],
+  outfile: join(outDir, "index.js"),
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  target: "chrome140",
+  sourcemap: true,
+  logLevel: "warning"
 });
 
 // Pug, one HTML file per language

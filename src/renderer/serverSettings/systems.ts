@@ -1,8 +1,7 @@
-import * as electron from "electron";
-import { ChildProcess } from "child_process";
 import * as async from "async";
-import forkServerProcess from "../forkServerProcess";
-import * as TreeView from "dnd-tree-view";
+import { api } from "../api";
+import type { Registry, RegistryCommand } from "../../shared/types";
+import TreeView from "dnd-tree-view";
 import * as dialogs from "simple-dialogs";
 import html from "../html";
 import * as i18n from "../../shared/i18n";
@@ -35,27 +34,14 @@ const installedElt = detailsElt.querySelector("tr.installed td") as HTMLLabelEle
 const latestElt = detailsElt.querySelector("tr.latest td") as HTMLLabelElement;
 
 let registry: Registry;
-let registryServerProcess: ChildProcess;
-const serverProcessById: { [id: string]: ChildProcess } = {};
+let fetchingRegistry = false;
+/** IDs of the systems & plugins currently being installed, updated or uninstalled */
+const runningActions = new Set<string>();
 
-export type Registry = {
-  version: number;
-  core: ItemData;
-  systems: { [sytemId: string]: SystemData }
-};
-
-interface ItemData {
-  version: string;
-  downloadURL: string;
-  releaseNotesURL: string;
-  localVersion: string;
-  isLocalDev: boolean;
-}
-
-interface SystemData extends ItemData {
-  repository: string;
-  plugins: { [authorName: string]: { [pluginName: string]: ItemData; } };
-}
+api.on("registry:progress", (id, percent) => {
+  const progressElt = treeView.treeRoot.querySelector(`li[data-id="${id}"] .progress`) as HTMLDivElement;
+  if (progressElt != null) progressElt.textContent = `${percent}%`;
+});
 
 type RegistryCallback = (registry: Registry) => void;
 
@@ -70,30 +56,24 @@ export function getRegistry(callback: RegistryCallback) {
 }
 
 export function refreshRegistry() {
-  if (registryServerProcess != null) return;
+  if (fetchingRegistry) return;
 
   registry = null;
   treeView.clear();
 
-  registryServerProcess = forkServerProcess([ "registry" ]);
+  fetchingRegistry = true;
   updateUI();
 
-  registryServerProcess.on("message", onRegistryReceived);
-  registryServerProcess.on("exit", () => {
-    registryServerProcess = null;
+  api.invoke("registry:fetch").then((fetchedRegistry) => {
+    fetchingRegistry = false;
+    onRegistryReceived(fetchedRegistry);
     updateUI();
   });
 }
 
-function onRegistryReceived(event: any) {
-  if (event.type !== "registry") {
-    // TODO: Whoops?! Handle error?
-    console.log(event);
-    return;
-  }
-
-  if (event.error == null && event.registry != null) {
-    registry = event.registry;
+function onRegistryReceived(fetchedRegistry: Registry | null) {
+  if (fetchedRegistry != null) {
+    registry = fetchedRegistry;
     const systemsById = registry.systems;
 
     for (const systemId in systemsById) {
@@ -128,7 +108,7 @@ function onRegistryReceived(event: any) {
 }
 
 type ActionItem = { systemId: string; authorName?: string; pluginName?: string };
-export function action(command: string, item: ActionItem, callback?: (succeed: boolean) => void) {
+export function action(command: RegistryCommand, item: ActionItem, callback?: (succeed: boolean) => void) {
   getRegistry((registry) => {
     if (registry == null) return;
 
@@ -138,30 +118,15 @@ export function action(command: string, item: ActionItem, callback?: (succeed: b
     const registryItem = item.pluginName != null ? registry.systems[item.systemId].plugins[item.authorName][item.pluginName] : registry.systems[item.systemId];
 
     progressElt.textContent = "...";
-    const process = serverProcessById[id] = forkServerProcess([ command, id, "--force", `--download-url=${registryItem.downloadURL}` ]);
-    process.stdout.on("data", () => { /* Ignore, we're just draining to prevent the process from getting stuck */ });
+    runningActions.add(id);
     updateUI();
 
-    process.on("message", (event: any) => {
-      if (event.type === "error") {
-        new dialogs.InfoDialog(event.message);
-        return;
-      }
-
-      if (event.type !== "progress") {
-        // TODO: Whoops?! Handle error?
-        console.log(event);
-        return;
-      }
-
-      progressElt.textContent = `${event.value}%`;
-    });
-
-    process.on("exit", (statusCode: number) => {
+    api.invoke("registry:run", command, id, registryItem.downloadURL).then(({ ok, error }) => {
       progressElt.textContent = "";
-      delete serverProcessById[id];
+      runningActions.delete(id);
+      if (error != null) new dialogs.InfoDialog(error);
 
-      if (statusCode === 0) {
+      if (ok) {
         if (command === "uninstall") {
           registryItem.localVersion = null;
           if (item.pluginName == null) {
@@ -177,7 +142,7 @@ export function action(command: string, item: ActionItem, callback?: (succeed: b
       }
 
       updateUI();
-      if (callback != null) callback(statusCode === 0);
+      if (callback != null) callback(ok);
     });
   });
 }
@@ -212,14 +177,14 @@ export function updateAll(callback?: Function) {
 }
 
 function updateUI() {
-  if (registryServerProcess != null) {
+  if (fetchingRegistry) {
     refreshButton.disabled = true;
     detailsElt.hidden = true;
     localServer.setServerUpdating(false);
     return;
   }
 
-  const updating = Object.keys(serverProcessById).length > 0;
+  const updating = runningActions.size > 0;
   refreshButton.disabled = updating;
   localServer.setServerUpdating(updating);
 
@@ -232,8 +197,8 @@ function updateUI() {
     const registrySystem = registry.systems[systemId];
     const registryItem = pluginName != null ? registrySystem.plugins[authorName][pluginName] : registrySystem;
 
-    installOrUninstallButton.disabled = serverProcessById[id] != null || registryItem.isLocalDev || (pluginName != null && registrySystem.localVersion == null);
-    updateButton.disabled = serverProcessById[id] != null || registryItem.isLocalDev || registryItem.localVersion == null || registryItem.version === registryItem.localVersion;
+    installOrUninstallButton.disabled = runningActions.has(id) || registryItem.isLocalDev || (pluginName != null && registrySystem.localVersion == null);
+    updateButton.disabled = runningActions.has(id) || registryItem.isLocalDev || registryItem.localVersion == null || registryItem.version === registryItem.localVersion;
 
     const installOrUninstallAction = registryItem.isLocalDev || registryItem.localVersion == null ? "install" : "uninstall";
     installOrUninstallButton.textContent = i18n.t(`common:actions.${installOrUninstallAction}`);
@@ -250,7 +215,7 @@ function updateUI() {
 
 function installOrUninstallClick() {
   const id = treeView.selectedNodes.length === 1 ? treeView.selectedNodes[0].dataset["id"] : null;
-  if (id == null || serverProcessById[id] != null) return;
+  if (id == null || runningActions.has(id)) return;
 
   const [ systemId, pluginPath ] = id.split(":");
   const [ authorName, pluginName ] = pluginPath != null ? pluginPath.split("/") : [null, null];
@@ -261,7 +226,7 @@ function installOrUninstallClick() {
 
 function onUpdateClick() {
   const id = treeView.selectedNodes.length === 1 ? treeView.selectedNodes[0].dataset["id"] : null;
-  if (id == null || serverProcessById[id] != null) return;
+  if (id == null || runningActions.has(id)) return;
 
   const [ systemId, pluginPath ] = id.split(":");
   const [ authorName, pluginName ] = pluginPath != null ? pluginPath.split("/") : [null, null];
@@ -277,5 +242,5 @@ function onReleaseNotesClick() {
   const [ authorName, pluginName ] = pluginPath != null ? pluginPath.split("/") : [null, null];
   const registryItem = pluginName != null ? registry.systems[systemId].plugins[authorName][pluginName] : registry.systems[systemId];
 
-  electron.shell.openExternal(registryItem.releaseNotesURL);
+  api.send("app:open-external", registryItem.releaseNotesURL);
 }

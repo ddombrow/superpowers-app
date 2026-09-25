@@ -1,53 +1,30 @@
-import * as async from "async";
-import * as fs from "fs";
-
-interface I18nValue {
-  [key: string]: I18nValue | string;
-}
-interface I18nContext {
-  [name: string]: I18nValue;
-}
-
-let localesPath: string;
-export function setLocalesPath(path: string) {
-  localesPath = path;
-}
-
-export function getLanguageIds() {
-  return fs.readdirSync(localesPath);
-}
+import type { LocaleContexts, LocaleValue } from "./types";
 
 export let languageCode: string;
+let contexts: LocaleContexts = {};
+let fallbackContexts: LocaleContexts = {};
 
 export function setLanguageCode(code: string) {
   languageCode = code;
 }
 
-export const contexts: { [name: string]: I18nContext } = {};
-export const fallbackContexts: { [name: string]: I18nContext } = {};
+/** Adds loaded namespaces (see `loadLocales` in src/main/locales.ts) */
+export function addContexts(newContexts: LocaleContexts, newFallbackContexts: LocaleContexts) {
+  contexts = { ...contexts, ...newContexts };
+  fallbackContexts = { ...fallbackContexts, ...newFallbackContexts };
+}
 
-export class LocalizedError {
+export class LocalizedError extends Error {
   constructor(
     public key: string,
     public variables: { [key: string]: string }
-  ) {}
-}
-
-export function load(contextNames: string[], callback: () => void) {
-  async.each(contextNames, loadContext.bind(null, languageCode, contexts), () => {
-    if (languageCode === "en") {
-      callback();
-      return;
-    }
-
-    async.each(contextNames, loadContext.bind(null, "en", fallbackContexts), callback);
-  });
+  ) {
+    super(key);
+  }
 }
 
 export function t(key: string, variables?: { [name: string]: string | number }) {
-  let result = genericT(contexts, key, variables);
-  if (result == null) result = genericT(fallbackContexts, key, variables);
-  return result != null ? result : key;
+  return genericT(contexts, key, variables) ?? genericT(fallbackContexts, key, variables) ?? key;
 }
 
 export function getLocalizedFilename(filename: string) {
@@ -56,56 +33,23 @@ export function getLocalizedFilename(filename: string) {
   return `${basename}.${languageCode}.${extension}`;
 }
 
-function loadContext(
-  languageCode: string,
-  contexts: { [name: string]: I18nContext },
-  contextName: string,
-  callback: () => void
-) {
-  const filePath = `${localesPath}/${languageCode}/${contextName}.json`;
-
-  fs.readFile(filePath, { encoding: "utf8" }, (err, text) => {
-    if (err != null) {
-      callback();
-      return;
-    }
-    contexts[contextName] = JSON.parse(text);
-    callback();
-  });
-}
-
-function genericT(
-  contexts: { [name: string]: I18nContext },
-  key: string,
-  variables?: { [name: string]: string | number }
-) {
+function genericT(contexts: LocaleContexts, key: string, variables?: { [name: string]: string | number }) {
   const [contextName, keys] = key.split(":");
-  const keyParts = keys.split(".");
+  if (keys == null) return null;
 
-  let valueOrText: I18nValue | string = contexts[contextName];
-  if (valueOrText == null) return null;
-
-  for (const keyPart of keyParts) {
-    valueOrText = (valueOrText as I18nValue)[keyPart];
-    if (valueOrText == null) return null;
+  let valueOrText: LocaleValue | string | undefined = contexts[contextName];
+  for (const keyPart of keys.split(".")) {
+    if (valueOrText == null || typeof valueOrText === "string") return null;
+    valueOrText = valueOrText[keyPart];
   }
 
-  if (typeof valueOrText === "string") return insertVariables(valueOrText, variables);
-  else return key;
+  if (valueOrText == null) return null;
+  if (typeof valueOrText === "string") return insertVariables(valueOrText, variables ?? {});
+  return key;
 }
 
 function insertVariables(text: string, variables: { [key: string]: string | number }) {
-  let index = 0;
-  do {
-    index = text.indexOf("${", index);
-    if (index !== -1) {
-      const endIndex = text.indexOf("}", index);
-      const key = text.slice(index + 2, endIndex);
-      const value = variables[key] != null ? variables[key] : `"${key}" is missing`;
-      text = text.slice(0, index) + value + text.slice(endIndex + 1);
-      index += 1;
-    }
-  } while (index !== -1);
-
-  return text;
+  return text.replace(/\$\{([^}]*)\}/g, (_match, key: string) =>
+    variables[key] != null ? String(variables[key]) : `"${key}" is missing`
+  );
 }
