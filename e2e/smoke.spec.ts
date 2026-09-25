@@ -85,6 +85,17 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
       ]);
     await window.screenshot({ path: "test-results/screens/04-server-hub.png" });
 
+    // ⌘W (macOS menu) closes the active tab rather than the window
+    if (process.platform === "darwin") {
+      await app.evaluate(({ BrowserWindow, Menu }) => {
+        const [mainWindow] = BrowserWindow.getAllWindows();
+        Menu.getApplicationMenu()?.getMenuItemById("close-tab")?.click(undefined, mainWindow, mainWindow.webContents);
+      });
+      await expect(window.getByRole("tab", { name: /My Server/ })).toHaveCount(0);
+      await expect(window.getByRole("tab", { name: "Home" })).toHaveAttribute("aria-selected", "true");
+      expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true);
+    }
+
     expect(pageErrors).toEqual([]);
 
     // Quitting stops the local server and saves the settings

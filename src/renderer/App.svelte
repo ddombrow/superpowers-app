@@ -20,6 +20,9 @@
     void boot(WelcomeDialog);
   });
 
+  // ⌘W on macOS goes through the app menu
+  $effect(() => api.on("app:close-tab", () => tabs.close(tabs.activeId)));
+
   function onkeydown(event: KeyboardEvent) {
     const ctrlOrCmd = event.ctrlKey || event.metaKey;
     if (event.key === "F12") {

@@ -42,7 +42,7 @@ if (!app.requestSingleInstanceLock()) {
 process.on("exit", killAllServerProcesses);
 
 async function start() {
-  menu.setup(app);
+  menu.setup(app, (window) => window === mainWindow);
 
   // Startup errors are shown in the system language until settings are loaded
   i18n.setLanguageCode(await resolveLanguageCode(localesPath, undefined, app.getLocale()));

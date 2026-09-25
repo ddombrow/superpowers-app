@@ -1,6 +1,7 @@
-import { Menu } from "electron";
+import { Menu, type BrowserWindow } from "electron";
 
-export function setup(app: Electron.App) {
+/** `isMainWindow` tells the launcher window apart from project & build windows */
+export function setup(app: Electron.App, isMainWindow: (window: BrowserWindow) => boolean) {
   if (process.platform !== "darwin") {
     Menu.setApplicationMenu(null);
     return;
@@ -100,9 +101,15 @@ export function setup(app: Electron.App) {
           role: "minimize"
         },
         {
-          label: "Close",
+          // Like in browsers: closes the active tab of the launcher, or other windows
+          id: "close-tab",
+          label: "Close Tab",
           accelerator: "CmdOrCtrl+W",
-          role: "close"
+          click: (_item, window) => {
+            if (window == null) return;
+            if (isMainWindow(window as BrowserWindow)) (window as BrowserWindow).webContents.send("app:close-tab");
+            else window.close();
+          }
         },
         {
           type: "separator"

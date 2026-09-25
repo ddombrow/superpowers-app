@@ -70,6 +70,8 @@ export interface EventChannels {
   "core:install-progress": [value: number | null, max: number];
   "registry:progress": [id: string, percent: number];
   "irc:event": [event: IrcEvent];
+  /** From the macOS menu (⌘W) */
+  "app:close-tab": [];
 }
 
 export type InvokeChannel = keyof InvokeChannels;
@@ -117,7 +119,8 @@ export const eventChannels = channelList<EventChannel>()(
   "local-server:log",
   "core:install-progress",
   "registry:progress",
-  "irc:event"
+  "irc:event",
+  "app:close-tab"
 );
 
 /** The object exposed on `window.api` by src/preload/app.ts */
