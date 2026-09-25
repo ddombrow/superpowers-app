@@ -20,7 +20,12 @@ export default function forkSererProcess(extraArgs: string[] = []) {
   const serverProcess = fork(
     serverPath,
     [ `--data-path=${settings.userDataPath}` ].concat(extraArgs),
-    { silent: true, env: serverEnv }
+    {
+      silent: true, env: serverEnv,
+      // NOTE: Core listens on "localhost" and the app connects to 127.0.0.1.
+      // Since Node 17, "localhost" may resolve to ::1 first, so force IPv4.
+      execArgv: [ "--dns-result-order=ipv4first" ]
+    }
   );
   return serverProcess;
 }
