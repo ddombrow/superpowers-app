@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["svelte", "vite/client"],
+    "verbatimModuleSyntax": true,
+    "noEmit": true
+  },
+  "include": ["src/renderer", "src/shared"],
+  "exclude": ["src/**/*.test.ts"]
+}

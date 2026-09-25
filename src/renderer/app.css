@@ -1,0 +1,186 @@
+@font-face {
+  font-family: "Roboto";
+  font-weight: 300;
+  src: url("./assets/fonts/Roboto/Roboto-Light.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-weight: 400;
+  src: url("./assets/fonts/Roboto/Roboto-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-style: italic;
+  font-weight: 400;
+  src: url("./assets/fonts/Roboto/Roboto-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-weight: 500;
+  src: url("./assets/fonts/Roboto/Roboto-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-weight: 700;
+  src: url("./assets/fonts/Roboto/Roboto-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-weight: 700;
+  src: url("./assets/fonts/Lato/Lato-Bold.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: light dark;
+
+  --font: "Roboto", system-ui, sans-serif;
+  --font-display: "Lato", var(--font);
+  --radius: 6px;
+  --gap: 8px;
+
+  --bg: #ffffff;
+  --bg-sidebar: #f3f3f5;
+  --bg-raised: #ffffff;
+  --bg-sunken: #e9e9ec;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-selected: #dbe8fb;
+  --fg: #26262b;
+  --fg-muted: #6b6b76;
+  --border: #d7d7dc;
+  --accent: #2f6fdb;
+  --accent-fg: #ffffff;
+  --danger: #c2372c;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --backdrop: rgba(20, 20, 26, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1d22;
+    --bg-sidebar: #25252b;
+    --bg-raised: #2c2c33;
+    --bg-sunken: #17171b;
+    --bg-hover: rgba(255, 255, 255, 0.06);
+    --bg-selected: #2b3d5c;
+    --fg: #e7e7ec;
+    --fg-muted: #9a9aa6;
+    --border: #3a3a43;
+    --accent: #5b92f0;
+    --accent-fg: #0e1320;
+    --danger: #ef6b5f;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --backdrop: rgba(0, 0, 0, 0.55);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font: 14px/1.4 var(--font);
+  background: var(--bg);
+  color: var(--fg);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Form controls */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+button.danger {
+  color: var(--danger);
+}
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input:not([type]),
+select,
+textarea {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  user-select: text;
+}
+input:invalid {
+  border-color: var(--danger);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* An icon from an SVG file, tinted with the current text color */
+.icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background-color: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+}

@@ -1,6 +1,8 @@
-**/node_modules
-public/**/*.js
-public/**/*.css
-public/**/*.html
-src/**/*.js
-packages/*
+node_modules/
+out/
+dist/
+.dev-core/
+.eslintcache
+test-results/
+playwright-report/
+.electron-profile/

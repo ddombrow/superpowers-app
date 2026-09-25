@@ -1,0 +1,125 @@
+import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { findServerProcesses, launchApp } from "./fixtures";
+
+test("first launch: install prompt, local server, hub webview with SupApp, clean quit", async () => {
+  const { app, window, dataPath, quit, cleanup } = await launchApp();
+  const pageErrors: string[] = [];
+  window.on("pageerror", (err) => pageErrors.push(err.message));
+  window.on("console", (message) => {
+    // Content Security Policy violations and other errors logged by the UI
+    if (message.type() === "error") pageErrors.push(message.text());
+  });
+
+  try {
+    await expect(window).toHaveTitle("Superpowers");
+
+    // Electron's profile stays out of the Superpowers data (projects, settings...)
+    expect(await app.evaluate(({ app }) => app.getPath("userData"))).toBe(join(dataPath, ".electron-profile"));
+
+    // The launcher UI is sandboxed: no Node.js, only the preload's API
+    expect(
+      await window.evaluate(() => {
+        const globals = window as unknown as Record<string, object | undefined>;
+        return {
+          require: typeof globals.require,
+          process: typeof globals.process,
+          api: Object.keys(globals.api ?? {}).sort()
+        };
+      })
+    ).toEqual({ require: "undefined", process: "undefined", api: ["invoke", "on", "send"] });
+
+    // First launch goes straight to the "Install the game system?" prompt: without a
+    // chat backend, there's no welcome dialog (it only asks for chat details)
+    const installPrompt = window.getByRole("dialog", { name: "Getting started" });
+    await expect(installPrompt).toBeVisible({ timeout: 60_000 });
+    await expect(window.getByRole("dialog", { name: "Welcome to Superpowers!" })).toHaveCount(0);
+    await expect(window.getByRole("combobox", { name: "Chat presence" })).toHaveCount(0);
+    await window.screenshot({ path: "test-results/screens/01-install-prompt.png" });
+    await installPrompt.getByRole("button", { name: "Skip" }).click();
+
+    const localServerStatus = window.getByRole("region", { name: "My Server" }).getByRole("status");
+    await expect(localServerStatus).toHaveText("Server running.", { timeout: 60_000 });
+    await window.screenshot({ path: "test-results/screens/03-server-running.png" });
+
+    // Open the local server: its hub loads in a webview with the SupApp preload
+    await window.getByRole("option", { name: /My Server/ }).dblclick();
+    await expect(window.getByRole("tab", { name: /My Server/ })).toHaveAttribute("aria-selected", "true");
+    await expect(window.locator("webview")).toBeVisible();
+
+    await expect
+      .poll(
+        () =>
+          app.evaluate(async ({ webContents }) => {
+            const guest = webContents.getAllWebContents().find((wc) => wc.getType() === "webview");
+            if (guest == null || guest.isLoading()) return null;
+            return guest.executeJavaScript("typeof SupApp === 'object' ? Object.keys(SupApp).sort() : null");
+          }),
+        { timeout: 30_000 }
+      )
+      .toEqual([
+        "chooseFile",
+        "chooseFolder",
+        "clipboard",
+        "createMenu",
+        "createMenuItem",
+        "getCurrentWindow",
+        "mkdirp",
+        "mktmpdir",
+        "onMessage",
+        "openLink",
+        "openWindow",
+        "readDir",
+        "sendMessage",
+        "showItemInFolder",
+        "showMainWindow",
+        "spawnChildProcess",
+        "tryFileAccess",
+        "writeFile"
+      ]);
+    await window.screenshot({ path: "test-results/screens/04-server-hub.png" });
+
+    // ⌘W (macOS menu) closes the active tab rather than the window
+    if (process.platform === "darwin") {
+      await app.evaluate(({ BrowserWindow, Menu }) => {
+        const [mainWindow] = BrowserWindow.getAllWindows();
+        Menu.getApplicationMenu()?.getMenuItemById("close-tab")?.click(undefined, mainWindow, mainWindow.webContents);
+      });
+      await expect(window.getByRole("tab", { name: /My Server/ })).toHaveCount(0);
+      await expect(window.getByRole("tab", { name: "Home" })).toHaveAttribute("aria-selected", "true");
+      expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true);
+    }
+
+    expect(pageErrors).toEqual([]);
+
+    // Quitting stops the local server and saves the settings
+    expect(findServerProcesses(dataPath)).toHaveLength(1);
+    expect(await quit()).toEqual([]);
+    const settings = JSON.parse(readFileSync(join(dataPath, "settings.json"), "utf8"));
+    expect(settings).toMatchObject({ version: 2, autoStartServer: true });
+  } finally {
+    await cleanup();
+  }
+});
+
+test("later launches skip the first-run prompt and auto-start the server", async () => {
+  const first = await launchApp();
+  let cleanupSecond: (() => Promise<void>) | null = null;
+
+  try {
+    const installPrompt = first.window.getByRole("dialog", { name: "Getting started" });
+    await expect(installPrompt).toBeVisible({ timeout: 60_000 });
+    await installPrompt.getByRole("button", { name: "Skip" }).click();
+    await first.quitKeepingData();
+
+    const second = await launchApp({ dataPath: first.dataPath });
+    cleanupSecond = second.cleanup;
+    const status = second.window.getByRole("region", { name: "My Server" }).getByRole("status");
+    await expect(status).toHaveText("Server running.", { timeout: 60_000 });
+    await expect(second.window.getByRole("dialog")).toHaveCount(0);
+  } finally {
+    if (cleanupSecond != null) await cleanupSecond();
+    else await first.cleanup();
+  }
+});

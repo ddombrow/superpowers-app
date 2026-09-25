@@ -1,0 +1,6 @@
+out/
+dist/
+.dev-core/
+test-results/
+package-lock.json
+resources/locales/

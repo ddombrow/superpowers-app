@@ -1,0 +1,35 @@
+{
+  "presence": {
+    "label": "Chat presence",
+    "online": "Online",
+    "away": "Away",
+    "offline": "Offline"
+  },
+  
+  "chat": {
+    "showStatus": "Show chat status"
+  },
+
+  "servers": {
+    "title": "Servers",
+    "add": "Add server",
+    "edit": "Edit server",
+    "remove": "Remove server"
+  },
+
+  "addServer": {
+    "title": "Enter server details"
+  },
+
+  "editServer": {
+    "title": "Edit server details"
+  },
+
+  "removeServer": {
+    "confirm": "Remove \"${label}\" from your servers?"
+  },
+
+  "setNickname": {
+    "title": "Set nickname"
+  }
+}

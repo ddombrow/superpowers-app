@@ -1,0 +1,62 @@
+{
+  "myServer": "My Server",
+  "autoConfigured": "(automatically configured)",
+  "log": "Server log",
+
+  "status": {
+  	"starting": "Server starting...",
+  	"started": "Server running.",
+  	"stopping": "Server stopping...",
+  	"stopped": "Server stopped.",
+    "updating": "Server updating..."
+  },
+
+  "buttons": {
+    "settings": "Settings",
+    "start": "Start",
+    "stop": "Stop"
+  },
+
+  "settings": {
+    "title": "Server Settings",
+    "error": "Could not load server settings",
+    "serverMustBeStopped": "Server must be stopped before editing settings.",
+
+    "general": {
+      "title": "General",
+
+      "serverName": "Server name",
+      "mainPort": "Main port",
+      "buildPort": "Build port",
+
+      "autoStart": "Auto-start server when launching the app"
+    },
+
+    "storage": {
+      "title": "Storage",
+      "openProjectsFolder": "Open projects folder",
+      "recentBuilds": "Recent builds to keep"
+    },
+
+    "authentication": {
+      "title": "Authentication",
+      "openToInternet": "Open server to the Internet",
+      "password": "Password",
+
+      "guestAccount": "Enable temporary guest accounts",
+      "localAccount": "Enable local account creation",
+      "externalServices": "Enable login with external services"
+    }
+  },
+  
+  "systems": {
+    "title": "Systems and plugins",
+    "updateAll": "Update all",
+    "installed": "Installed version",
+    "latest": "Latest version",
+    "releaseNotes": "Release notes",
+    "couldNotFetch": "Could not fetch the list of systems and plugins.",
+    "installedBadge": "installed",
+    "updateBadge": "update"
+  }
+}

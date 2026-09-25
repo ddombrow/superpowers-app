@@ -1,0 +1,25 @@
+{
+  "presence": {
+    "online": "Conectado",
+    "away": "Ausente",
+    "offline": "Desconectado"
+  },
+
+  "servers": {
+    "add": "Adicionar servidor",
+    "edit": "Editar servidor",
+    "remove": "Remover servidor"
+  },
+
+  "addServer": {
+    "title": "Digite os detalhes do servidor"
+  },
+
+  "editServer": {
+    "title": "Editar detalhes do servidor"
+  },
+
+  "setNickname": {
+    "title": "Definir apelido"
+  }
+}
