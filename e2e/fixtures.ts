@@ -28,7 +28,7 @@ export function findServerProcesses(dataPath: string): string[] {
     .filter((line) => line.includes(dataPath) && line.includes("server/index.js"));
 }
 
-export async function launchApp(): Promise<LaunchedApp> {
+export async function launchApp(options: { env?: Record<string, string> } = {}): Promise<LaunchedApp> {
   const dataPath = mkdtempSync(join(tmpdir(), "superpowers-e2e-"));
   const devCorePath = join(root, ".dev-core");
   if (existsSync(devCorePath)) {
@@ -40,10 +40,11 @@ export async function launchApp(): Promise<LaunchedApp> {
 
   // Set SUPERPOWERS_EXECUTABLE to test a packaged build instead of the dev build in out/
   const executablePath = process.env.SUPERPOWERS_EXECUTABLE;
+  const env = { ...(process.env as Record<string, string>), ...options.env };
   const app = await electron.launch(
     executablePath != null
-      ? { executablePath, args: [`--core-path=${dataPath}`] }
-      : { args: [root, `--core-path=${dataPath}`], cwd: root }
+      ? { executablePath, args: [`--core-path=${dataPath}`], env }
+      : { args: [root, `--core-path=${dataPath}`], cwd: root, env }
   );
   const window = await app.firstWindow();
 

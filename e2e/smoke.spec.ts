@@ -7,6 +7,10 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
   const { app, window, dataPath, quit, cleanup } = await launchApp();
   const pageErrors: string[] = [];
   window.on("pageerror", (err) => pageErrors.push(err.message));
+  window.on("console", (message) => {
+    // Content Security Policy violations and other errors logged by the UI
+    if (message.type() === "error") pageErrors.push(message.text());
+  });
 
   try {
     await expect(window).toHaveTitle("Superpowers");
@@ -26,25 +30,27 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
       })
     ).toEqual({ require: "undefined", process: "undefined", api: ["invoke", "on", "send"] });
 
-    const nicknameField = window.locator("#nickname-field");
-    await expect(nicknameField).toBeVisible({ timeout: 60_000 });
+    const welcome = window.getByRole("dialog", { name: "Welcome to Superpowers!" });
+    await expect(welcome).toBeVisible({ timeout: 60_000 });
     await window.screenshot({ path: "test-results/screens/01-welcome.png" });
 
-    await nicknameField.fill("E2ETester");
-    await window.locator("#go-online-checkbox").uncheck();
-    await window.locator(".dialog .validate-button").click();
+    await welcome.getByRole("textbox", { name: "Nickname" }).fill("E2ETester");
+    await welcome.getByRole("checkbox", { name: "Connect to community chat" }).uncheck();
+    await welcome.getByRole("button", { name: "Get started!" }).click();
 
     // "Install the game system?" prompt
-    const skipButton = window.locator(".dialog .cancel-button");
-    await expect(skipButton).toBeVisible();
+    const installPrompt = window.getByRole("dialog", { name: "Getting started" });
+    await expect(installPrompt).toBeVisible();
     await window.screenshot({ path: "test-results/screens/02-install-prompt.png" });
-    await skipButton.click();
+    await installPrompt.getByRole("button", { name: "Skip" }).click();
 
-    await expect(window.locator(".local-server .status")).toHaveText("Server running.", { timeout: 60_000 });
+    const localServerStatus = window.getByRole("region", { name: "My Server" }).getByRole("status");
+    await expect(localServerStatus).toHaveText("Server running.", { timeout: 60_000 });
     await window.screenshot({ path: "test-results/screens/03-server-running.png" });
 
     // Open the local server: its hub loads in a webview with the SupApp preload
-    await window.locator(".servers-tree-view").getByText("My Server").dblclick();
+    await window.getByRole("option", { name: /My Server/ }).dblclick();
+    await expect(window.getByRole("tab", { name: /My Server/ })).toHaveAttribute("aria-selected", "true");
     await expect(window.locator("webview")).toBeVisible();
 
     await expect

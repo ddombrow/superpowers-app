@@ -27,12 +27,6 @@ export function t(key: string, variables?: { [name: string]: string | number }) 
   return genericT(contexts, key, variables) ?? genericT(fallbackContexts, key, variables) ?? key;
 }
 
-export function getLocalizedFilename(filename: string) {
-  if (languageCode === "en") return filename;
-  const [basename, extension] = filename.split(".");
-  return `${basename}.${languageCode}.${extension}`;
-}
-
 function genericT(contexts: LocaleContexts, key: string, variables?: { [name: string]: string | number }) {
   const [contextName, keys] = key.split(":");
   if (keys == null) return null;

@@ -1,5 +1,6 @@
 {
   "presence": {
+    "label": "Chat presence",
     "online": "Online",
     "away": "Away",
     "offline": "Offline"
@@ -10,6 +11,7 @@
   },
 
   "servers": {
+    "title": "Servers",
     "add": "Add server",
     "edit": "Edit server",
     "remove": "Remove server"
@@ -21,6 +23,10 @@
 
   "editServer": {
     "title": "Edit server details"
+  },
+
+  "removeServer": {
+    "confirm": "Remove \"${label}\" from your servers?"
   },
 
   "setNickname": {

@@ -3,6 +3,7 @@
   "prompt": "Superpowers lets you collaborate with people around the world.",
 
   "nickname": "Nickname",
+  "nicknameRules": "2 to 16 letters, digits, - or _, starting with a letter",
   "connectToChat": "Connect to community chat",
 
   "getStarted": "Get started!",

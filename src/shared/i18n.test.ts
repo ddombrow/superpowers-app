@@ -36,10 +36,6 @@ describe("i18n", () => {
     expect(i18n.t("common:does.not.exist")).toBe("common:does.not.exist");
     expect(i18n.t("nonamespace")).toBe("nonamespace");
   });
-
-  it("localizes filenames for non-English languages", () => {
-    expect(i18n.getLocalizedFilename("index.html")).toBe("index.fr.html");
-  });
 });
 
 describe("resolveLanguageCode", () => {

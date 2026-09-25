@@ -4,6 +4,7 @@
   "none": "(None)",
   
   "actions": {
+    "ok": "OK",
     "cancel": "Cancel",
     "clear": "Clear",
     "close": "Close",
@@ -28,6 +29,7 @@
     "hostnamePlaceholder": "Server IP or domain name",
     "port": "Port",
     "label": "Label",
+    "labelPlaceholder": "A name for your server",
     "password": "Password",
 
     "connecting": "Connecting to ${baseUrl}...",
@@ -36,7 +38,8 @@
       "superpowersJSON": "Could not download ${baseUrl}/superpowers.json.",
       "incorrectPassword": "Wrong password for ${baseUrl}.",
       "notSuperpowers": "The server at ${baseUrl} doesn't seem to be running Superpowers.",
-      "incompatibleVersion": "The server at ${baseUrl} runs an incompatible version of Superpowers (got app API version ${serverVersion}, expected ${appVersion})."
+      "incompatibleVersion": "The server at ${baseUrl} runs an incompatible version of Superpowers (got app API version ${serverVersion}, expected ${appVersion}).",
+      "failedToLoad": "Could not load ${baseUrl}."
     }
   },
 

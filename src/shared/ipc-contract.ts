@@ -11,6 +11,7 @@ import type {
   Registry,
   RegistryCommand,
   ServerConfig,
+  ServerProbeResult,
   Settings,
   SettingsLoadResult
 } from "./types";
@@ -23,6 +24,8 @@ export interface InvokeChannels {
     result: { contexts: LocaleContexts; fallbackContexts: LocaleContexts };
   };
   "app:check-for-update": { args: []; result: AppUpdate | null };
+  "app:fetch-news": { args: []; result: string | null };
+  "server:probe": { args: [baseUrl: string, password: string]; result: ServerProbeResult };
 
   "settings:load": { args: []; result: SettingsLoadResult };
   "server-config:load": { args: []; result: ServerConfig | null };
@@ -82,6 +85,8 @@ export const invokeChannels = channelList<InvokeChannel>()(
   "app:get-info",
   "app:get-locales",
   "app:check-for-update",
+  "app:fetch-news",
+  "server:probe",
   "settings:load",
   "server-config:load",
   "core:is-installed",

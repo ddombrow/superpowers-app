@@ -92,3 +92,8 @@ export type IrcEvent =
   | { type: "away"; nick: string; message: string }
   | { type: "message"; kind: "privmsg" | "notice" | "action"; from: string; to: string; message: string }
   | { type: "disconnected"; reason: string | null };
+
+export type ServerProbeResult =
+  | { ok: true; buildPort: number }
+  | { ok: false; error: "unreachable" | "unauthorized" | "notSuperpowers" }
+  | { ok: false; error: "incompatible"; serverApiVersion: number };

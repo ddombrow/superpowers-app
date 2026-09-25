@@ -7,7 +7,8 @@ test("a second instance exits and leaves the first one running", async () => {
   const { app, window, dataPath, cleanup } = await launchApp();
 
   try {
-    await expect(window.locator("#nickname-field")).toBeVisible({ timeout: 60_000 });
+    const welcome = window.getByRole("dialog", { name: "Welcome to Superpowers!" });
+    await expect(welcome).toBeVisible({ timeout: 60_000 });
 
     // In Node, the "electron" package exports the path to the Electron binary
     const electronPath =
@@ -18,7 +19,7 @@ test("a second instance exits and leaves the first one running", async () => {
 
     expect(exitCode).toBe(0);
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
-    await expect(window.locator("#nickname-field")).toBeVisible();
+    await expect(welcome).toBeVisible();
   } finally {
     await cleanup();
   }

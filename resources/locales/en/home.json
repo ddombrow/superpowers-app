@@ -4,6 +4,7 @@
   "tagline": "2D+3D game making for indies. Free and open source,&nbsp;<b>finally</b>.",
 
   "news": {
+    "title": "News",
     "couldNotFetch": "Could not fetch latest news."
   },
 

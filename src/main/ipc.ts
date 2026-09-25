@@ -13,6 +13,8 @@ import { installCore, isCoreInstalled } from "./coreInstaller";
 import { setHttpAuth } from "./httpAuth";
 import type { IrcService } from "./irc";
 import { loadLocales } from "./locales";
+import { fetchNews } from "./news";
+import { probeServer } from "./serverProbe";
 import type { LocalServer } from "./localServer";
 import type { RegistryService } from "./registry";
 import { loadServerConfig, type ServerConfigWriter } from "./serverConfig";
@@ -71,6 +73,9 @@ export function setupIpc(services: Services) {
     isTrusted
   );
   handle("app:check-for-update", () => (info.isPackaged ? checkForAppUpdate(info.appVersion) : null), isTrusted);
+
+  handle("app:fetch-news", () => fetchNews(info.languageCode), isTrusted);
+  handle("server:probe", (baseUrl, password) => probeServer(baseUrl, password, info.appApiVersion), isTrusted);
 
   handle("settings:load", () => settings.load(), isTrusted);
   on("settings:save", (newSettings) => settings.save(newSettings), isTrusted);

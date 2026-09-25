@@ -75,7 +75,7 @@ async function start() {
   const serverConfig = new ServerConfigWriter(paths.userDataPath);
   const localServer = new LocalServer(paths.corePath, paths.userDataPath);
   const registry = new RegistryService(paths.corePath, paths.userDataPath);
-  const irc = new IrcService();
+  const irc = new IrcService(getIrcNetworkOverride());
 
   setupIpc({
     info,
@@ -141,7 +141,10 @@ function createMainWindow() {
   creatingMainWindow = false;
 
   const window = mainWindow;
-  window.loadFile(join(__dirname, "../legacy/renderer", i18n.getLocalizedFilename("index.html")));
+  // electron-vite serves the UI with hot reloading during `npm run dev`
+  const devServerURL = process.env.ELECTRON_RENDERER_URL;
+  if (!app.isPackaged && devServerURL != null) void window.loadURL(devServerURL);
+  else void window.loadFile(join(__dirname, "../renderer/index.html"));
   window.once("ready-to-show", () => window.show());
 
   window.webContents.on("will-navigate", (event) => {
@@ -219,4 +222,12 @@ function setupCleanExit(shutdown: () => Promise<void>) {
       app.quit();
     });
   });
+}
+
+/** SUPERPOWERS_IRC_SERVER=host:port connects chat to another server, without TLS (used by tests) */
+function getIrcNetworkOverride() {
+  const override = process.env.SUPERPOWERS_IRC_SERVER;
+  if (override == null || override === "") return undefined;
+  const [host, port] = override.split(":");
+  return { host, port: Number(port), tls: false };
 }

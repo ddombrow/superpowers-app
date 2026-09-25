@@ -54,6 +54,9 @@
     "updateAll": "Update all",
     "installed": "Installed version",
     "latest": "Latest version",
-    "releaseNotes": "Release notes"
+    "releaseNotes": "Release notes",
+    "couldNotFetch": "Could not fetch the list of systems and plugins.",
+    "installedBadge": "installed",
+    "updateBadge": "update"
   }
 }
