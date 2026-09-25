@@ -15,19 +15,17 @@ export interface LaunchedApp {
   app: ElectronApplication;
   window: Page;
   dataPath: string;
-  /** Quits like a user would; resolves with the processes still running from the data folder afterwards */
+  /** Quits like a user would; resolves with the core server processes still running afterwards */
   quit: () => Promise<string[]>;
   /** Quits, kills anything left over, and deletes the data folder */
   cleanup: () => Promise<void>;
 }
 
-/** Processes whose command line mentions `dataPath` (i.e. core servers started for this test) */
-export function findProcesses(dataPath: string): string[] {
-  try {
-    return execFileSync("pgrep", ["-fl", dataPath], { encoding: "utf8" }).trim().split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
+/** Core server processes (`server/index.js`) started with this data folder */
+export function findServerProcesses(dataPath: string): string[] {
+  return execFileSync("ps", ["-A", "-o", "pid=,args="], { encoding: "utf8" })
+    .split("\n")
+    .filter((line) => line.includes(dataPath) && line.includes("server/index.js"));
 }
 
 export async function launchApp(): Promise<LaunchedApp> {
@@ -55,7 +53,7 @@ export async function launchApp(): Promise<LaunchedApp> {
       const closed = new Promise<void>((resolve) => app.once("close", () => resolve()));
       await app.evaluate(({ app }) => app.quit()).catch(() => {});
       await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 15_000))]);
-      return findProcesses(dataPath);
+      return findServerProcesses(dataPath);
     })();
     return quitting;
   };

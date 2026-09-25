@@ -9,7 +9,9 @@ test("a second instance exits and leaves the first one running", async () => {
   try {
     await expect(window.locator("#nickname-field")).toBeVisible({ timeout: 60_000 });
 
-    const electronPath = process.env.SUPERPOWERS_EXECUTABLE ?? (require("electron") as unknown as string);
+    // In Node, the "electron" package exports the path to the Electron binary
+    const electronPath =
+      process.env.SUPERPOWERS_EXECUTABLE ?? ((await import("electron")).default as unknown as string);
     const args = process.env.SUPERPOWERS_EXECUTABLE != null ? [] : [join(__dirname, "..")];
     const second = spawn(electronPath, [...args, `--core-path=${dataPath}`], { stdio: "ignore" });
     const exitCode = await new Promise<number | null>((resolve) => second.on("exit", resolve));

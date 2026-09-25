@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { findProcesses, launchApp } from "./fixtures";
+import { findServerProcesses, launchApp } from "./fixtures";
 
 test("first launch: welcome, local server, hub webview with SupApp, clean quit", async () => {
   const { app, window, dataPath, quit, cleanup } = await launchApp();
@@ -82,7 +82,7 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
     expect(pageErrors).toEqual([]);
 
     // Quitting stops the local server and saves the settings
-    expect(findProcesses(dataPath)).toContainEqual(expect.stringContaining("server/index.js"));
+    expect(findServerProcesses(dataPath)).toHaveLength(1);
     expect(await quit()).toEqual([]);
     const settings = JSON.parse(readFileSync(join(dataPath, "settings.json"), "utf8"));
     expect(settings).toMatchObject({ version: 2, nickname: "E2ETester", presence: "offline" });
