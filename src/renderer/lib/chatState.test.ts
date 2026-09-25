@@ -4,8 +4,8 @@ import { ChatState } from "./chatState.svelte";
 const lines = (chat: ChatState, target: string) => chat.get(target)!.log.flatMap((entry) => entry.lines);
 
 function connected(hooks = {}) {
-  const chat = new ChatState(hooks);
-  chat.apply({ type: "connecting", host: "irc.libera.chat", port: 6697 });
+  const chat = new ChatState(hooks, () => "Test chat");
+  chat.apply({ type: "connecting" });
   chat.apply({ type: "registered", nick: "me" });
   return chat;
 }
@@ -18,7 +18,7 @@ describe("ChatState", () => {
     expect(chat.me).toBe("me");
     expect(chat.connecting).toBe(true);
     expect(onRegistered).toHaveBeenCalledOnce();
-    expect(lines(chat, "status")).toEqual(["Connecting to irc.libera.chat:6697...", "Connected as me."]);
+    expect(lines(chat, "status")).toEqual(["Connecting to Test chat...", "Connected as me."]);
   });
 
   it("groups consecutive messages from the same person", () => {
@@ -107,7 +107,7 @@ describe("ChatState", () => {
     chat.apply({
       type: "message",
       kind: "notice",
-      from: "irc.libera.chat",
+      from: "chat.example",
       to: "*",
       message: "Looking up your hostname"
     });

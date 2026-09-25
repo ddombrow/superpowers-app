@@ -17,12 +17,8 @@ export interface Settings {
   savedChatrooms: string[];
 }
 
-/** One-time messages to show the user after a settings migration */
-export type SettingsNotice = "liberaMigration";
-
 export type SettingsLoadResult =
-  | { ok: true; settings: Settings; isFirstRun: boolean; notices: SettingsNotice[] }
-  | { ok: false; error: string; settings: Settings };
+  { ok: true; settings: Settings; isFirstRun: boolean } | { ok: false; error: string; settings: Settings };
 
 export interface ServerConfig {
   serverName: string | null;
@@ -64,6 +60,8 @@ export interface AppInfo {
   appVersion: string;
   isPackaged: boolean;
   appApiVersion: number;
+  /** The chat backend, if any (see src/main/chat/backend.ts); without one, the chat UI is hidden */
+  chat: { name: string } | null;
 }
 
 export type LocaleContexts = { [namespace: string]: LocaleValue };
@@ -77,12 +75,14 @@ export interface AppUpdate {
   downloadURL: string;
 }
 
-export type IrcEvent =
-  | { type: "connecting"; host: string; port: number }
+/** What a chat backend reports to the UI (see src/main/chat/backend.ts) */
+export type ChatEvent =
+  | { type: "connecting" }
   | { type: "registered"; nick: string }
-  | { type: "motd"; lines: string[] }
+  /** Status messages from the service, shown in the status tab */
   | { type: "info"; text: string }
   | { type: "topic"; channel: string; topic: string }
+  /** `modes`: "o" for operators, "v" for voiced users */
   | { type: "userlist"; channel: string; users: { nick: string; modes: string[] }[] }
   | { type: "join"; channel: string; nick: string }
   | { type: "part"; channel: string; nick: string; message: string }

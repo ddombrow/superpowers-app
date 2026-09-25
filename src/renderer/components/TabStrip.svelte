@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ircNetwork } from "../lib/chat.svelte";
+  import { chatName } from "../lib/chat.svelte";
   import { t } from "../lib/i18n";
   import type { IconName } from "../lib/icons";
   import { tabs, type Tab } from "../lib/tabs.svelte";
@@ -18,7 +18,7 @@
           detail: tab.server.port !== "" ? `${tab.server.hostname}:${tab.server.port}` : tab.server.hostname
         };
       case "chat":
-        return { icon: "chat", label: tab.target === "status" ? ircNetwork.host : tab.target };
+        return { icon: "chat", label: tab.target === "status" ? chatName() : tab.target };
     }
   }
 </script>

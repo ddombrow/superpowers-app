@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import ResizeHandle from "../components/ResizeHandle.svelte";
   import { api } from "../lib/api";
-  import { chat, ircNetwork, joinChannel, sendFromInput } from "../lib/chat.svelte";
+  import { chat, chatName, joinChannel, sendFromInput } from "../lib/chat.svelte";
   import { linkify, nicknameColor } from "../lib/chatFormat";
 
   let { target, active }: { target: string; active: boolean } = $props();
@@ -18,8 +18,8 @@
   let logElement = $state<HTMLElement>();
   let inputElement = $state<HTMLTextAreaElement>();
 
-  const title = $derived(target === "status" ? `${ircNetwork.host}:${ircNetwork.port}` : target);
-  const details = $derived(target === "status" ? "" : `on ${ircNetwork.host}:${ircNetwork.port}`);
+  const title = $derived(target === "status" ? chatName() : target);
+  const details = $derived(target === "status" ? "" : `on ${chatName()}`);
   const topic = $derived.by(() => {
     if (target === "status") return "Connection status";
     if (conversation == null || !conversation.isChannel) return "Private chat";

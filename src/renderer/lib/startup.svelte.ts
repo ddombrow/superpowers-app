@@ -1,6 +1,6 @@
 import type { Component } from "svelte";
 import { api, appInfo } from "./api";
-import { languageChatRooms, startChat } from "./chat.svelte";
+import { chatEnabled, languageChatRooms, startChat } from "./chat.svelte";
 import { confirm, info, openDialog, type DialogProps } from "./dialogs.svelte";
 import { languageCode, t } from "./i18n";
 import { startLocalServer } from "./localServer.svelte";
@@ -13,7 +13,7 @@ import {
   updateAll
 } from "./registry.svelte";
 import { loadServerConfig } from "./serverConfig.svelte";
-import { loadSettings, notices, saveSettings, settings } from "./settings.svelte";
+import { isFirstRun, loadSettings, saveSettings, settings } from "./settings.svelte";
 import { tabs } from "./tabs.svelte";
 
 /** How long the splash screen takes to fade out */
@@ -60,11 +60,13 @@ export async function boot(welcomeDialog: Component<DialogProps<WelcomeResult>>)
   startup.phase = "ready";
   await new Promise((resolve) => setTimeout(resolve, splashFadeDuration));
 
-  if (settings.nickname == null) {
-    await welcome(welcomeDialog);
+  if (isFirstRun) {
+    // Creates the settings file, so the next launch isn't a first run too
+    saveSettings();
+    // The welcome dialog only asks for chat details
+    if (chatEnabled()) await welcome(welcomeDialog);
     await installFirstSystem();
   } else {
-    if (notices.includes("liberaMigration")) void info(t("common:chat.liberaMigration"));
     startChat();
     await updateSystemsAndPlugins();
     startLocalServerIfNeeded();

@@ -2,7 +2,7 @@
   import type { ServerEntry } from "../../shared/types";
   import Icon from "../components/Icon.svelte";
   import ServerDialog from "../dialogs/ServerDialog.svelte";
-  import { openStatusTab, setNickname, setPresence } from "../lib/chat.svelte";
+  import { chatEnabled, openStatusTab, setNickname, setPresence } from "../lib/chat.svelte";
   import { nicknamePatternString } from "../lib/chatFormat";
   import { confirm, openDialog, prompt } from "../lib/dialogs.svelte";
   import { t } from "../lib/i18n";
@@ -104,28 +104,30 @@
 </script>
 
 <aside class="sidebar">
-  <section class="me">
-    <img src={avatarURL} alt="" width="44" height="44" />
-    <div class="me-info">
-      <button type="button" class="nickname" title={t("sidebar:setNickname.title")} onclick={changeNickname}>
-        {settings.nickname ?? "Superpowers"}
-      </button>
-      <div class="presence">
-        <select
-          aria-label={t("sidebar:presence.label")}
-          value={settings.presence}
-          onchange={(event) => setPresence(event.currentTarget.value as typeof settings.presence)}
-        >
-          <option value="online">{t("sidebar:presence.online")}</option>
-          <option value="away">{t("sidebar:presence.away")}</option>
-          <option value="offline">{t("sidebar:presence.offline")}</option>
-        </select>
-        <button type="button" class="link status-link" onclick={openStatusTab}>
-          {t("sidebar:chat.showIrcStatus")}
+  {#if chatEnabled()}
+    <section class="me">
+      <img src={avatarURL} alt="" width="44" height="44" />
+      <div class="me-info">
+        <button type="button" class="nickname" title={t("sidebar:setNickname.title")} onclick={changeNickname}>
+          {settings.nickname ?? "Superpowers"}
         </button>
+        <div class="presence">
+          <select
+            aria-label={t("sidebar:presence.label")}
+            value={settings.presence}
+            onchange={(event) => setPresence(event.currentTarget.value as typeof settings.presence)}
+          >
+            <option value="online">{t("sidebar:presence.online")}</option>
+            <option value="away">{t("sidebar:presence.away")}</option>
+            <option value="offline">{t("sidebar:presence.offline")}</option>
+          </select>
+          <button type="button" class="link status-link" onclick={openStatusTab}>
+            {t("sidebar:chat.showStatus")}
+          </button>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  {/if}
 
   <div class="toolbar" role="toolbar" aria-label={t("sidebar:servers.title")}>
     <button type="button" title={t("sidebar:servers.add")} aria-label={t("sidebar:servers.add")} onclick={addServer}>

@@ -7,7 +7,8 @@ import type { AppInfo } from "../shared/types";
 import { loadAuthorizations, saveAuthorizations, setupSupAppIpc } from "./authorizations";
 import { setupHttpAuth } from "./httpAuth";
 import { openExternal, setupIpc } from "./ipc";
-import { IrcService } from "./irc";
+import type { ChatBackend } from "./chat/backend";
+import { LoopbackChatBackend } from "./chat/loopback";
 import { loadLocales, resolveLanguageCode } from "./locales";
 import { LocalServer } from "./localServer";
 import * as menu from "./menu";
@@ -63,19 +64,21 @@ async function start() {
 
   loadAuthorizations(paths.userDataPath);
 
+  const chat = createChatBackend();
+
   const packageJSON = JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8"));
   const info: AppInfo = {
     ...paths,
     languageCode,
     appVersion: app.isPackaged ? `v${app.getVersion()}` : `v${app.getVersion()}-dev`,
     isPackaged: app.isPackaged,
-    appApiVersion: packageJSON.superpowers.appApiVersion
+    appApiVersion: packageJSON.superpowers.appApiVersion,
+    chat: chat != null ? { name: chat.name } : null
   };
 
   const serverConfig = new ServerConfigWriter(paths.userDataPath);
   const localServer = new LocalServer(paths.corePath, paths.userDataPath);
   const registry = new RegistryService(paths.corePath, paths.userDataPath);
-  const irc = new IrcService(getIrcNetworkOverride());
 
   setupIpc({
     info,
@@ -84,7 +87,7 @@ async function start() {
     serverConfig,
     localServer,
     registry,
-    irc,
+    chat,
     getMainWindow: () => mainWindow,
     quit: () => app.quit()
   });
@@ -94,7 +97,7 @@ async function start() {
   setupSupAppIpc(restoreMainWindow);
   setupHttpAuth();
   setupCleanExit(async () => {
-    irc.disconnect();
+    chat?.disconnect();
     await Promise.allSettled([
       localServer.stop(),
       settings.flush(),
@@ -224,10 +227,16 @@ function setupCleanExit(shutdown: () => Promise<void>) {
   });
 }
 
-/** SUPERPOWERS_IRC_SERVER=host:port connects chat to another server, without TLS (used by tests) */
-function getIrcNetworkOverride() {
-  const override = process.env.SUPERPOWERS_IRC_SERVER;
-  if (override == null || override === "") return undefined;
-  const [host, port] = override.split(":");
-  return { host, port: Number(port), tls: false };
+/** SUPERPOWERS_CHAT_BACKEND=loopback enables the local chat backend, for developing and testing the chat UI */
+function createChatBackend(): ChatBackend | null {
+  switch (process.env.SUPERPOWERS_CHAT_BACKEND) {
+    case "loopback": {
+      const backend = new LoopbackChatBackend();
+      // Lets end-to-end tests simulate other users (see e2e/chat.spec.ts)
+      (globalThis as { superpowersLoopbackChat?: LoopbackChatBackend }).superpowersLoopbackChat = backend;
+      return backend;
+    }
+    default:
+      return null;
+  }
 }

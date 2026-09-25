@@ -19,6 +19,8 @@ export interface LaunchedApp {
   quit: () => Promise<string[]>;
   /** Quits, kills anything left over, and deletes the data folder */
   cleanup: () => Promise<void>;
+  /** Quits without deleting the data folder, to launch again with `{ dataPath }` */
+  quitKeepingData: () => Promise<void>;
 }
 
 /** Core server processes (`server/index.js`) started with this data folder */
@@ -28,10 +30,17 @@ export function findServerProcesses(dataPath: string): string[] {
     .filter((line) => line.includes(dataPath) && line.includes("server/index.js"));
 }
 
-export async function launchApp(options: { env?: Record<string, string> } = {}): Promise<LaunchedApp> {
-  const dataPath = mkdtempSync(join(tmpdir(), "superpowers-e2e-"));
+export interface LaunchOptions {
+  env?: Record<string, string>;
+  /** Reuses the data folder of a previous launch (which must have been quit, not cleaned up) */
+  dataPath?: string;
+}
+
+export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedApp> {
+  const reusingData = options.dataPath != null;
+  const dataPath = options.dataPath ?? mkdtempSync(join(tmpdir(), "superpowers-e2e-"));
   const devCorePath = join(root, ".dev-core");
-  if (existsSync(devCorePath)) {
+  if (!reusingData && existsSync(devCorePath)) {
     cpSync(devCorePath, dataPath, {
       recursive: true,
       filter: (src) => !src.endsWith("settings.json") && !src.includes(".electron-profile")
@@ -59,7 +68,7 @@ export async function launchApp(options: { env?: Record<string, string> } = {}):
     return quitting;
   };
 
-  const cleanup = async () => {
+  const quitKeepingData = async () => {
     await quit();
     await app.close().catch(() => {});
 
@@ -69,8 +78,12 @@ export async function launchApp(options: { env?: Record<string, string> } = {}):
     } catch {
       /* nothing left running */
     }
+  };
+
+  const cleanup = async () => {
+    await quitKeepingData();
     rmSync(dataPath, { recursive: true, force: true });
   };
 
-  return { app, window, dataPath, quit, cleanup };
+  return { app, window, dataPath, quit, cleanup, quitKeepingData };
 }

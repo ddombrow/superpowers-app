@@ -1,11 +1,11 @@
 import { copyFile, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Settings, SettingsLoadResult, SettingsNotice } from "../shared/types";
+import type { Settings, SettingsLoadResult } from "../shared/types";
 
 /**
  * Settings file versions:
- * - 1 (no `version` field): original format, chat on freenode
- * - 2: chat moved to Libera.Chat
+ * - 1 (no `version` field): original format
+ * - 2: normalized (ports as strings, passwords always set)
  */
 export const currentVersion = 2;
 
@@ -21,37 +21,24 @@ export function defaultSettings(): Settings {
 }
 
 /** Normalizes a parsed settings file, keeping unknown keys (e.g. `languageCode`) */
-export function migrate(data: Record<string, unknown>): { data: Record<string, unknown>; notices: SettingsNotice[] } {
-  const notices: SettingsNotice[] = [];
-  const version = typeof data.version === "number" ? data.version : 1;
-
-  if (version < 2) {
-    const savedChatrooms = Array.isArray(data.savedChatrooms) ? data.savedChatrooms : [];
-    if (savedChatrooms.length > 0 || (data.presence != null && data.presence !== "offline")) {
-      notices.push("liberaMigration");
-    }
-  }
-
+export function migrate(data: Record<string, unknown>): Record<string, unknown> {
   const defaults = defaultSettings();
   const favoriteServers = Array.isArray(data.favoriteServers) ? data.favoriteServers : defaults.favoriteServers;
 
   return {
-    data: {
-      ...data,
-      version: currentVersion,
-      favoriteServers: favoriteServers.map((entry: Record<string, unknown>) => ({
-        hostname: String(entry.hostname ?? ""),
-        port: entry.port != null ? String(entry.port) : "",
-        label: String(entry.label ?? ""),
-        password: String(entry.password ?? "")
-      })),
-      recentProjects: Array.isArray(data.recentProjects) ? data.recentProjects : defaults.recentProjects,
-      autoStartServer: typeof data.autoStartServer === "boolean" ? data.autoStartServer : defaults.autoStartServer,
-      nickname: typeof data.nickname === "string" ? data.nickname : defaults.nickname,
-      presence: ["online", "away", "offline"].includes(data.presence as string) ? data.presence : defaults.presence,
-      savedChatrooms: Array.isArray(data.savedChatrooms) ? data.savedChatrooms : defaults.savedChatrooms
-    },
-    notices
+    ...data,
+    version: currentVersion,
+    favoriteServers: favoriteServers.map((entry: Record<string, unknown>) => ({
+      hostname: String(entry.hostname ?? ""),
+      port: entry.port != null ? String(entry.port) : "",
+      label: String(entry.label ?? ""),
+      password: String(entry.password ?? "")
+    })),
+    recentProjects: Array.isArray(data.recentProjects) ? data.recentProjects : defaults.recentProjects,
+    autoStartServer: typeof data.autoStartServer === "boolean" ? data.autoStartServer : defaults.autoStartServer,
+    nickname: typeof data.nickname === "string" ? data.nickname : defaults.nickname,
+    presence: ["online", "away", "offline"].includes(data.presence as string) ? data.presence : defaults.presence,
+    savedChatrooms: Array.isArray(data.savedChatrooms) ? data.savedChatrooms : defaults.savedChatrooms
   };
 }
 
@@ -81,7 +68,7 @@ export class SettingsStore {
       json = await readFile(this.path, "utf8");
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        return { ok: true, settings: this.settings, isFirstRun: true, notices: [] };
+        return { ok: true, settings: this.settings, isFirstRun: true };
       }
       return { ok: false, error: (err as Error).message, settings: this.settings };
     }
@@ -89,10 +76,10 @@ export class SettingsStore {
     try {
       const parsed = JSON.parse(json);
       if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Not an object");
-      const { data, notices } = migrate(parsed);
-      this.data = data;
-      if (notices.length > 0) this.save(this.settings);
-      return { ok: true, settings: this.settings, isFirstRun: false, notices };
+      const needsMigration = parsed.version !== currentVersion;
+      this.data = migrate(parsed);
+      if (needsMigration) this.save(this.settings);
+      return { ok: true, settings: this.settings, isFirstRun: false };
     } catch (err) {
       // Keep the broken file around so nothing is lost when defaults get saved over it
       await copyFile(this.path, `${this.path}.bak`).catch(() => {});
@@ -112,8 +99,7 @@ export class SettingsStore {
   }
 
   save(settings: Settings) {
-    const { data } = migrate({ ...this.data, ...settings });
-    this.data = data;
+    this.data = migrate({ ...this.data, ...settings });
 
     if (this.saveTimeout != null) return;
     this.saveTimeout = setTimeout(() => void this.flush(), this.saveDelay);

@@ -11,7 +11,7 @@ import type {
 import type { AppInfo } from "../shared/types";
 import { installCore, isCoreInstalled } from "./coreInstaller";
 import { setHttpAuth } from "./httpAuth";
-import type { IrcService } from "./irc";
+import type { ChatBackend } from "./chat/backend";
 import { loadLocales } from "./locales";
 import { fetchNews } from "./news";
 import { probeServer } from "./serverProbe";
@@ -28,7 +28,8 @@ export interface Services {
   serverConfig: ServerConfigWriter;
   localServer: LocalServer;
   registry: RegistryService;
-  irc: IrcService;
+  /** Null when there is no chat backend; chat messages are then ignored */
+  chat: ChatBackend | null;
   getMainWindow: () => BrowserWindow | null;
   quit: () => void;
 }
@@ -55,7 +56,7 @@ function on<C extends SendChannel>(
 }
 
 export function setupIpc(services: Services) {
-  const { info, settings, serverConfig, localServer, registry, irc } = services;
+  const { info, settings, serverConfig, localServer, registry, chat } = services;
 
   // Only the launcher window may use these channels, not server webviews or project windows
   const isTrusted = (event: IpcMainEvent | IpcMainInvokeEvent) =>
@@ -100,14 +101,14 @@ export function setupIpc(services: Services) {
   localServer.on("status", (status) => emit("local-server:status", status));
   localServer.on("log", (text) => emit("local-server:log", text));
 
-  on("irc:connect", (nickname, presence) => irc.connect(nickname, presence), isTrusted);
-  on("irc:disconnect", () => irc.disconnect(), isTrusted);
-  on("irc:set-presence", (presence) => irc.setPresence(presence), isTrusted);
-  on("irc:nick", (nickname) => irc.changeNick(nickname), isTrusted);
-  on("irc:join", (channel) => irc.join(channel), isTrusted);
-  on("irc:part", (channel) => irc.part(channel), isTrusted);
-  on("irc:say", (target, message) => irc.say(target, message), isTrusted);
-  irc.on("event", (event) => emit("irc:event", event));
+  on("chat:connect", (nickname, presence) => chat?.connect(nickname, presence), isTrusted);
+  on("chat:disconnect", () => chat?.disconnect(), isTrusted);
+  on("chat:set-presence", (presence) => chat?.setPresence(presence), isTrusted);
+  on("chat:nick", (nickname) => chat?.changeNick(nickname), isTrusted);
+  on("chat:join", (channel) => chat?.join(channel), isTrusted);
+  on("chat:part", (channel) => chat?.part(channel), isTrusted);
+  on("chat:say", (target, message) => chat?.say(target, message), isTrusted);
+  chat?.on("event", (event) => emit("chat:event", event));
 
   on("app:quit", () => services.quit(), isTrusted);
   on("app:open-dev-tools", () => services.getMainWindow()?.webContents.openDevTools(), isTrusted);

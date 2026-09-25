@@ -1,37 +1,42 @@
 import type { Presence } from "../../shared/types";
-import { api } from "./api";
+import { api, appInfo } from "./api";
 import { ChatState, conversationKey } from "./chatState.svelte";
 import { saveSettings, settings } from "./settings.svelte";
 import { chatTabId, tabs } from "./tabs.svelte";
 import iconURL from "../assets/images/superpowers-256.png";
 
-export { ircNetwork } from "../../shared/endpoints";
+/** Whether there's a chat backend; without one, all chat UI is hidden */
+export const chatEnabled = () => appInfo.chat != null;
+export const chatName = () => appInfo.chat?.name ?? "Chat";
 
 /** Chatrooms for languages that have one, e.g. #superpowers-html5-fr */
 export const languageChatRooms = ["fr"];
 
-export const chat = new ChatState({
-  onRegistered() {
-    for (const conversation of Object.values(chat.conversations)) {
-      if (!conversation.isChannel) continue;
-      chat.addInfo(conversation.target, `Joining ${conversation.target}...`);
-      api.send("irc:join", conversation.target);
+export const chat = new ChatState(
+  {
+    onRegistered() {
+      for (const conversation of Object.values(chat.conversations)) {
+        if (!conversation.isChannel) continue;
+        chat.addInfo(conversation.target, `Joining ${conversation.target}...`);
+        api.send("chat:join", conversation.target);
+      }
+    },
+    onPrivateRenamed(oldNick, newNick) {
+      const oldId = chatTabId(oldNick);
+      if (tabs.has(oldId)) tabs.rename(oldId, { id: chatTabId(newNick), kind: "chat", target: newNick });
+    },
+    onNotify(title, body, key) {
+      const target = chat.conversations[key]?.target;
+      if (target != null) tabs.open({ id: chatTabId(target), kind: "chat", target }, false);
+      notify(title, body, () => {
+        if (target != null) tabs.activate(chatTabId(target));
+      });
     }
   },
-  onPrivateRenamed(oldNick, newNick) {
-    const oldId = chatTabId(oldNick);
-    if (tabs.has(oldId)) tabs.rename(oldId, { id: chatTabId(newNick), kind: "chat", target: newNick });
-  },
-  onNotify(title, body, key) {
-    const target = chat.conversations[key]?.target;
-    if (target != null) tabs.open({ id: chatTabId(target), kind: "chat", target }, false);
-    notify(title, body, () => {
-      if (target != null) tabs.activate(chatTabId(target));
-    });
-  }
-});
+  chatName
+);
 
-api.on("irc:event", (event) => {
+api.on("chat:event", (event) => {
   chat.apply(event);
 
   // New private conversations get a tab
@@ -44,7 +49,7 @@ tabs.onClose((tab) => {
   if (tab.kind !== "chat" || tab.target === "status") return;
 
   if (tab.target.startsWith("#")) {
-    if (chat.me != null) api.send("irc:part", tab.target);
+    if (chat.me != null) api.send("chat:part", tab.target);
     const key = conversationKey(tab.target);
     settings.savedChatrooms = settings.savedChatrooms.filter((room) => conversationKey(room) !== key);
     saveSettings();
@@ -67,6 +72,7 @@ function notify(title: string, body: string, onClick: () => void) {
 
 /** Called once the app has started: reconnects to saved chatrooms unless offline */
 export function startChat() {
+  if (!chatEnabled()) return;
   for (const room of settings.savedChatrooms) {
     chat.open(room);
     tabs.open({ id: chatTabId(room), kind: "chat", target: room }, false);
@@ -76,22 +82,22 @@ export function startChat() {
 
 function connect() {
   if (chat.connecting || settings.nickname == null) return;
-  api.send("irc:connect", settings.nickname, settings.presence);
+  api.send("chat:connect", settings.nickname, settings.presence);
 }
 
 export function setPresence(presence: Presence) {
   settings.presence = presence;
   saveSettings();
 
-  if (presence === "offline") api.send("irc:disconnect");
+  if (presence === "offline") api.send("chat:disconnect");
   else if (!chat.connecting) connect();
-  else api.send("irc:set-presence", presence);
+  else api.send("chat:set-presence", presence);
 }
 
 export function setNickname(nickname: string) {
   settings.nickname = nickname;
   saveSettings();
-  if (chat.connecting) api.send("irc:nick", nickname);
+  if (chat.connecting) api.send("chat:nick", nickname);
 }
 
 export function openStatusTab() {
@@ -109,7 +115,7 @@ export function joinChannel(name: string, focus = true) {
 
   if (chat.me != null) {
     chat.addInfo(conversation.target, `Joining ${conversation.target}...`);
-    api.send("irc:join", conversation.target);
+    api.send("chat:join", conversation.target);
   } else if (settings.presence === "offline") {
     setPresence("online");
   } else {
@@ -167,6 +173,6 @@ export function sendFromInput(target: string, input: string) {
 }
 
 function say(target: string, message: string) {
-  api.send("irc:say", target, message);
+  api.send("chat:say", target, message);
   chat.addMessage(target, chat.me!, message, "me");
 }

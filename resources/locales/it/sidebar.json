@@ -5,10 +5,6 @@
     "offline": "Non in linea"
   },
 
-  "chat": {
-    "showIrcStatus": "Mostra lo stato IRC"
-  },
-
   "servers": {
     "add": "Aggiungi server",
     "edit": "Modifica server",

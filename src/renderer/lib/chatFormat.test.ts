@@ -50,7 +50,7 @@ describe("nicknames", () => {
     expect(nicknameColor("alice")).toMatch(/^rgba\(\d+, \d+, \d+, 0\.25\)$/);
   });
 
-  it("validates nicknames like IRC servers do", () => {
+  it("validates nicknames", () => {
     expect(nicknamePattern.test("E2ETester")).toBe(true);
     expect(nicknamePattern.test("1abc")).toBe(false);
     expect(nicknamePattern.test("a")).toBe(false);

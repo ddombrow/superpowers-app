@@ -10,8 +10,6 @@ export const appReleases = {
 
 export const newsURL = (languageCode: string) => `http://superpowers-html5.com/news.${languageCode}.html`;
 
-export const ircNetwork = { host: "irc.libera.chat", port: 6697 };
-
 /** Links on the home page; `key` is under "home:links" in the locales */
 export const homeLinks = [
   { key: "documentation", url: "https://github.com/superpowers/docs.superpowers-html5.com" },

@@ -4,7 +4,7 @@
 import type {
   AppInfo,
   AppUpdate,
-  IrcEvent,
+  ChatEvent,
   LocalServerStatus,
   LocaleContexts,
   Presence,
@@ -54,13 +54,13 @@ export interface SendChannels {
   "local-server:start": [];
   "local-server:stop": [];
 
-  "irc:connect": [nickname: string, presence: Presence];
-  "irc:disconnect": [];
-  "irc:set-presence": [presence: Presence];
-  "irc:nick": [nickname: string];
-  "irc:join": [channel: string];
-  "irc:part": [channel: string];
-  "irc:say": [target: string, message: string];
+  "chat:connect": [nickname: string, presence: Presence];
+  "chat:disconnect": [];
+  "chat:set-presence": [presence: Presence];
+  "chat:nick": [nickname: string];
+  "chat:join": [channel: string];
+  "chat:part": [channel: string];
+  "chat:say": [target: string, message: string];
 }
 
 /** Main → renderer notifications: `api.on(channel, listener)` */
@@ -69,7 +69,7 @@ export interface EventChannels {
   "local-server:log": [text: string];
   "core:install-progress": [value: number | null, max: number];
   "registry:progress": [id: string, percent: number];
-  "irc:event": [event: IrcEvent];
+  "chat:event": [event: ChatEvent];
   /** From the macOS menu (⌘W) */
   "app:close-tab": [];
 }
@@ -106,20 +106,20 @@ export const sendChannels = channelList<SendChannel>()(
   "server-config:save",
   "local-server:start",
   "local-server:stop",
-  "irc:connect",
-  "irc:disconnect",
-  "irc:set-presence",
-  "irc:nick",
-  "irc:join",
-  "irc:part",
-  "irc:say"
+  "chat:connect",
+  "chat:disconnect",
+  "chat:set-presence",
+  "chat:nick",
+  "chat:join",
+  "chat:part",
+  "chat:say"
 );
 export const eventChannels = channelList<EventChannel>()(
   "local-server:status",
   "local-server:log",
   "core:install-progress",
   "registry:progress",
-  "irc:event",
+  "chat:event",
   "app:close-tab"
 );
 

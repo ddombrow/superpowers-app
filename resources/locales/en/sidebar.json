@@ -7,7 +7,7 @@
   },
   
   "chat": {
-    "showIrcStatus": "Show IRC Status"
+    "showStatus": "Show chat status"
   },
 
   "servers": {

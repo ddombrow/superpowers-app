@@ -18,7 +18,7 @@ afterEach(() => {
 describe("SettingsStore", () => {
   it("reports a first run when there is no settings file", async () => {
     const result = await new SettingsStore(dir).load();
-    expect(result).toEqual({ ok: true, settings: defaultSettings(), isFirstRun: true, notices: [] });
+    expect(result).toEqual({ ok: true, settings: defaultSettings(), isFirstRun: true });
   });
 
   it("loads and migrates a v1 settings file", async () => {
@@ -40,7 +40,6 @@ describe("SettingsStore", () => {
     if (!result.ok) throw new Error(result.error);
 
     expect(result.isFirstRun).toBe(false);
-    expect(result.notices).toEqual(["liberaMigration"]);
     expect(result.settings).toEqual({
       favoriteServers: [{ hostname: "example.com", port: "4237", label: "Example", password: "" }],
       recentProjects: [],
@@ -53,15 +52,16 @@ describe("SettingsStore", () => {
     // The migration is persisted, and unknown keys are kept
     await store.flush();
     expect(readSaved()).toMatchObject({ version: currentVersion, languageCode: "fr" });
-
-    const reloaded = await new SettingsStore(dir).load();
-    expect(reloaded.ok && reloaded.notices).toEqual([]);
   });
 
-  it("does not show the Libera notice to users who never used chat", async () => {
-    writeFileSync(settingsPath(), JSON.stringify({ nickname: "Someone", presence: "offline", savedChatrooms: [] }));
-    const result = await new SettingsStore(dir).load();
-    expect(result.ok && result.notices).toEqual([]);
+  it("doesn't rewrite files that are already up to date", async () => {
+    const contents = JSON.stringify({ version: currentVersion, ...defaultSettings() });
+    writeFileSync(settingsPath(), contents);
+
+    const store = new SettingsStore(dir, 0);
+    await store.load();
+    await store.flush();
+    expect(readFileSync(settingsPath(), "utf8")).toBe(contents);
   });
 
   it("backs up a corrupt file and returns defaults", async () => {

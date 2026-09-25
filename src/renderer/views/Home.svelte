@@ -1,7 +1,7 @@
 <script lang="ts">
   import { homeChatrooms, homeLinks } from "../../shared/endpoints";
   import { api } from "../lib/api";
-  import { joinChannel } from "../lib/chat.svelte";
+  import { chatEnabled, joinChannel } from "../lib/chat.svelte";
   import { t } from "../lib/i18n";
   import coverURL from "../assets/images/cover.png";
 
@@ -33,18 +33,20 @@
   </main>
 
   <aside>
-    <section>
-      <h2>{t("home:chatrooms.title")}</h2>
-      <ul>
-        {#each homeChatrooms as room (room.channel)}
-          <li>
-            <button type="button" class="link" onclick={() => joinChannel(room.channel)}
-              >{t(`home:chatrooms.${room.key}`)}</button
-            >
-          </li>
-        {/each}
-      </ul>
-    </section>
+    {#if chatEnabled()}
+      <section>
+        <h2>{t("home:chatrooms.title")}</h2>
+        <ul>
+          {#each homeChatrooms as room (room.channel)}
+            <li>
+              <button type="button" class="link" onclick={() => joinChannel(room.channel)}
+                >{t(`home:chatrooms.${room.key}`)}</button
+              >
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
     <section>
       <h2>{t("home:links.title")}</h2>
       <ul>

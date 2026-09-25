@@ -1,4 +1,4 @@
-import type { IrcEvent } from "../../shared/types";
+import type { ChatEvent } from "../../shared/types";
 import { mentions } from "./chatFormat";
 
 export interface LogEntry {
@@ -36,13 +36,17 @@ export interface ChatHooks {
   onNotify?: (title: string, body: string, conversationKey: string) => void;
 }
 
-/** Chat state, driven by `IrcEvent`s from the main process (see src/main/irc.ts) */
+/** Chat state, driven by `ChatEvent`s from the main process's chat backend (see src/main/chat/backend.ts) */
 export class ChatState {
   me = $state<string | null>(null);
   connecting = $state(false);
   conversations = $state<Record<string, Conversation>>({ status: newConversation("status") });
 
-  constructor(private hooks: ChatHooks = {}) {}
+  /** `getServiceName` gives the name shown in status messages, e.g. "Connecting to <name>..." */
+  constructor(
+    private hooks: ChatHooks = {},
+    private getServiceName = () => "chat"
+  ) {}
 
   get(target: string): Conversation | undefined {
     return this.conversations[conversationKey(target)];
@@ -96,21 +100,17 @@ export class ChatState {
     return result;
   }
 
-  apply(event: IrcEvent) {
+  apply(event: ChatEvent) {
     switch (event.type) {
       case "connecting":
         this.connecting = true;
-        this.addInfo("status", `Connecting to ${event.host}:${event.port}...`);
+        this.addInfo("status", `Connecting to ${this.getServiceName()}...`);
         break;
 
       case "registered":
         this.me = event.nick;
         this.addInfo("status", `Connected as ${event.nick}.`);
         this.hooks.onRegistered?.();
-        break;
-
-      case "motd":
-        for (const line of event.lines) this.addInfo("status", line);
         break;
 
       case "info":

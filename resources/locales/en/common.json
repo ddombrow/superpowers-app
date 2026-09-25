@@ -41,10 +41,6 @@
       "incompatibleVersion": "The server at ${baseUrl} runs an incompatible version of Superpowers (got app API version ${serverVersion}, expected ${appVersion}).",
       "failedToLoad": "Could not load ${baseUrl}."
     }
-  },
-
-  "chat": {
-    "liberaMigration": "Community chat has moved from freenode to Libera.Chat. Your saved chatrooms will reconnect there."
   }
 }
 

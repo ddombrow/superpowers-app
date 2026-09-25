@@ -17,17 +17,31 @@ export class RegistryService extends EventEmitter<RegistryEvents> {
     super();
   }
 
-  fetch(): Promise<Registry | null> {
+  /**
+   * Resolves with null if the registry can't be fetched, including when it takes longer than
+   * `timeout` ms: startup waits for it, so a stalled network must not hang the app.
+   */
+  fetch(timeout = 20_000): Promise<Registry | null> {
     this.pendingFetch ??= new Promise<Registry | null>((resolve) => {
       let registry: Registry | null = null;
       const child = forkServerProcess(this.corePath, this.userDataPath, ["registry"]);
+      const killTimeout = setTimeout(() => {
+        console.log(`Fetching the registry took more than ${timeout}ms, giving up.`);
+        child.kill();
+      }, timeout);
       child.stdout?.resume();
       child.on("message", (message: ServerMessage) => {
         if (message?.type === "registry" && message.error == null) registry = message.registry as Registry;
         else console.log("Unexpected registry message", message);
       });
-      child.on("error", () => resolve(null));
-      child.on("exit", () => resolve(registry));
+      child.on("error", () => {
+        clearTimeout(killTimeout);
+        resolve(null);
+      });
+      child.on("exit", () => {
+        clearTimeout(killTimeout);
+        resolve(registry);
+      });
     }).finally(() => {
       this.pendingFetch = null;
     });

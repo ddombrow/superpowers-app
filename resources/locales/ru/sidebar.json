@@ -4,10 +4,6 @@
     "away": "Отошел",
     "offline": "Не в сети"
   },
-  
-  "chat": {
-    "showIrcStatus": "Показать IRC Статус"
-  },
 
   "servers": {
     "add": "Добавить сервер",

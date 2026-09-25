@@ -10,10 +10,10 @@
 [How to contribute](http://docs.superpowers-html5.com/en/development/how-to-contribute) —
 [Build instructions](http://docs.superpowers-html5.com/en/development/building-superpowers)
 
-| Light                                              | Dark                                                          |
-| -------------------------------------------------- | ------------------------------------------------------------- |
-| ![Home](docs/screenshots/home-light.png)           | ![Server settings](docs/screenshots/server-settings-dark.png) |
-| ![Community chat](docs/screenshots/chat-light.png) | ![Adding a server](docs/screenshots/add-server-dark.png)      |
+| Light                                                         | Dark                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------- |
+| ![Home](docs/screenshots/home-light.png)                      | ![Server settings](docs/screenshots/server-settings-dark.png) |
+| ![Chat UI, loopback backend](docs/screenshots/chat-light.png) | ![Adding a server](docs/screenshots/add-server-dark.png)      |
 
 ## Development
 
@@ -32,7 +32,7 @@ npm run package    # installers for the current platform, in ./dist
 Project layout:
 
 - `src/main/`: Electron main process. Owns everything that touches the system: settings, the local
-  server and other core processes, core installs & updates, community chat (IRC) and file authorizations
+  server and other core processes, core installs & updates, the chat backend and file authorizations
 - `src/preload/app.ts`: exposes the channels declared in `src/shared/ipc-contract.ts` to the launcher UI,
   which runs sandboxed with no Node.js access
 - `src/preload/supapp.ts`: the `SupApp` API injected into server & project webviews ([compatibility notes](docs/supapp-compat.md))
@@ -44,5 +44,9 @@ Project layout:
 With `--core-path=<folder>` (as `npm run dev` does), all data lives in that folder, including
 Electron's profile in `<folder>/.electron-profile`.
 
-`SUPERPOWERS_IRC_SERVER=host:port` points community chat at another IRC server, without TLS.
-The end-to-end tests use it with a fake server (`src/main/testing/fakeIrcServer.ts`).
+### Chat
+
+The launcher has a chat UI (channels, private messages, presence) that talks to a pluggable
+backend in the main process: see `ChatBackend` in `src/main/chat/backend.ts`. No backend ships
+yet, so the chat UI is hidden by default. `SUPERPOWERS_CHAT_BACKEND=loopback npm run dev` enables
+a local stand-in (`src/main/chat/loopback.ts`) for working on the UI; the end-to-end tests use it too.

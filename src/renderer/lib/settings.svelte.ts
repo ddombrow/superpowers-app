@@ -1,4 +1,4 @@
-import type { ServerEntry, Settings, SettingsNotice } from "../../shared/types";
+import type { ServerEntry, Settings } from "../../shared/types";
 import { api } from "./api";
 
 type AppSettings = Omit<Settings, "favoriteServers"> & { favoriteServers: ServerEntry[] };
@@ -12,8 +12,6 @@ export const settings = $state<AppSettings>({
   savedChatrooms: []
 });
 
-/** One-time messages to show after a settings migration */
-export let notices: SettingsNotice[] = [];
 export let isFirstRun = false;
 
 /** Resolves with an error message if the settings file couldn't be read (defaults are used then) */
@@ -25,7 +23,6 @@ export async function loadSettings(): Promise<string | null> {
   });
 
   if (!result.ok) return result.error;
-  notices = result.notices;
   isFirstRun = result.isFirstRun;
   return null;
 }

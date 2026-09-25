@@ -4,10 +4,6 @@
     "away": "Ausente",
     "offline": "Desconectado"
   },
-  
-  "chat": {
-    "showIrcStatus": "Status do IRC"
-  },
 
   "servers": {
     "add": "Adicionar servidor",

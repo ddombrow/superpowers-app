@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findServerProcesses, launchApp } from "./fixtures";
 
-test("first launch: welcome, local server, hub webview with SupApp, clean quit", async () => {
+test("first launch: install prompt, local server, hub webview with SupApp, clean quit", async () => {
   const { app, window, dataPath, quit, cleanup } = await launchApp();
   const pageErrors: string[] = [];
   window.on("pageerror", (err) => pageErrors.push(err.message));
@@ -30,18 +30,13 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
       })
     ).toEqual({ require: "undefined", process: "undefined", api: ["invoke", "on", "send"] });
 
-    const welcome = window.getByRole("dialog", { name: "Welcome to Superpowers!" });
-    await expect(welcome).toBeVisible({ timeout: 60_000 });
-    await window.screenshot({ path: "test-results/screens/01-welcome.png" });
-
-    await welcome.getByRole("textbox", { name: "Nickname" }).fill("E2ETester");
-    await welcome.getByRole("checkbox", { name: "Connect to community chat" }).uncheck();
-    await welcome.getByRole("button", { name: "Get started!" }).click();
-
-    // "Install the game system?" prompt
+    // First launch goes straight to the "Install the game system?" prompt: without a
+    // chat backend, there's no welcome dialog (it only asks for chat details)
     const installPrompt = window.getByRole("dialog", { name: "Getting started" });
-    await expect(installPrompt).toBeVisible();
-    await window.screenshot({ path: "test-results/screens/02-install-prompt.png" });
+    await expect(installPrompt).toBeVisible({ timeout: 60_000 });
+    await expect(window.getByRole("dialog", { name: "Welcome to Superpowers!" })).toHaveCount(0);
+    await expect(window.getByRole("combobox", { name: "Chat presence" })).toHaveCount(0);
+    await window.screenshot({ path: "test-results/screens/01-install-prompt.png" });
     await installPrompt.getByRole("button", { name: "Skip" }).click();
 
     const localServerStatus = window.getByRole("region", { name: "My Server" }).getByRole("status");
@@ -102,8 +97,29 @@ test("first launch: welcome, local server, hub webview with SupApp, clean quit",
     expect(findServerProcesses(dataPath)).toHaveLength(1);
     expect(await quit()).toEqual([]);
     const settings = JSON.parse(readFileSync(join(dataPath, "settings.json"), "utf8"));
-    expect(settings).toMatchObject({ version: 2, nickname: "E2ETester", presence: "offline" });
+    expect(settings).toMatchObject({ version: 2, autoStartServer: true });
   } finally {
     await cleanup();
+  }
+});
+
+test("later launches skip the first-run prompt and auto-start the server", async () => {
+  const first = await launchApp();
+  let cleanupSecond: (() => Promise<void>) | null = null;
+
+  try {
+    const installPrompt = first.window.getByRole("dialog", { name: "Getting started" });
+    await expect(installPrompt).toBeVisible({ timeout: 60_000 });
+    await installPrompt.getByRole("button", { name: "Skip" }).click();
+    await first.quitKeepingData();
+
+    const second = await launchApp({ dataPath: first.dataPath });
+    cleanupSecond = second.cleanup;
+    const status = second.window.getByRole("region", { name: "My Server" }).getByRole("status");
+    await expect(status).toHaveText("Server running.", { timeout: 60_000 });
+    await expect(second.window.getByRole("dialog")).toHaveCount(0);
+  } finally {
+    if (cleanupSecond != null) await cleanupSecond();
+    else await first.cleanup();
   }
 });
